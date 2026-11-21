@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs do SSH: auth.log, journalctl e quem tentou entrar | Guia SSH</title>
+<meta name="description" content="Ler os logs do sshd no /var/log/auth.log e no journalctl: logins aceitos, usuários inválidos e de onde vieram.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Os <span class="hl">logs</span> do servidor</h1>
+
+<p class="intro">Cada tentativa de login deixa rastro. Esta aula mostra onde e como ler.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Achar o log do sshd.</li>
+<li>Ler linhas de login aceito e recusado.</li>
+<li>Contar tentativas por IP.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Onde o sshd conta o que aconteceu</h2>
+<p>Cada conexão, aceita ou recusada, vira uma linha de log no servidor. No Debian e no Ubuntu com systemd, o jeito mais direto é o <code>journalctl</code>; onde existe o arquivo <code>/var/log/auth.log</code>, ele tem as mesmas linhas:</p>
+<pre class="cmd">
+sudo journalctl -u ssh -n 20        # as últimas 20 linhas do serviço ssh
+sudo journalctl -u ssh -f           # acompanha ao vivo (Ctrl+C sai)
+</pre>
+<p>O laboratório grava em <code>/var/log/auth.log</code>. Antes da caixa, a ana entrou uma vez com a chave e alguém tentou o usuário <code>teste</code>, que não existe:</p>
+<hr>
+<h2>1. As linhas do sshd</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo grep -E 'Accepte[d]|Invalid use[r]|session opene[d] for user lab' /var/log/auth.log
+2026-11-21T12:03:12.403226-03:00 servidor sshd-session[49]: Accepted publickey for lab from 192.168.0.10 port 49770 ssh2: ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU   « entrou com chave
+2026-11-21T12:03:12.404378-03:00 servidor sshd-session[49]: pam_unix(sshd:session): session opened for user lab(uid=1002) by lab(uid=0)
+2026-11-21T12:03:12.477480-03:00 servidor sshd-session[56]: Invalid user teste from 192.168.0.10 port 49780   « usuário que não existe
+$</pre>
+<div class="tip"><strong>Por que os colchetes no grep?</strong><p>O próprio <code>sudo</code> também escreve no <code>auth.log</code> o comando que rodou, com o texto do grep. <code>Accepte[d]</code> casa com “Accepted”, mas não com a linha do sudo, que tem o texto <code>Accepte[d]</code> com os colchetes.</p></div>
+<hr>
+<h2>2. Contando</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo grep -c 'Accepted publicke[y]' /var/log/auth.log
+1
+$ sudo grep 'Invalid use[r]' /var/log/auth.log | awk '{print $(NF-2)}' | sort | uniq -c
+      1 192.168.0.10
+$</pre>
+<p>Num servidor de verdade, essa segunda linha costuma mostrar centenas de IPs desconhecidos por dia. É o motivo do <a href="fail2ban.html">fail2ban</a>.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Sem permissão</strong>
+<p>O log de autenticação é só do root e do grupo <code>adm</code>:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ tail -n 2 /var/log/auth.log
+tail: não foi possível abrir '/var/log/auth.log' para leitura: Permissão negada
+$ ls -l /var/log/auth.log
+-rw-r----- 1 root adm 173 nov 21 12:03 /var/log/auth.log
+$</pre>
+<p>Use <code>sudo</code>, ou peça para entrar no grupo <code>adm</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>sudo journalctl -u ssh</code></td><td>log pelo systemd.</td></tr>
+<tr><td><code>/var/log/auth.log</code></td><td>o arquivo.</td></tr>
+<tr><td><code>Accepted publickey</code></td><td>entrou com chave.</td></tr>
+<tr><td><code>Invalid user</code></td><td>usuário que não existe.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Pelo systemd</h3><p>Complete para ver o log do serviço ssh:</p><div class="ex-code">sudo journalctl -u <input data-answer="ssh" aria-label="resposta"> -n 20</div></div><div class="exercise"><h3>2. Ao vivo</h3><p>Que opção do <code>journalctl</code> acompanha as linhas novas?</p><div class="ex-code">sudo journalctl -u ssh <input data-answer="-f" aria-label="opção"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. <code>Invalid user teste from 192.168.0.10</code> quer dizer:</p>
+<label><input type="radio" name="q3"> o usuário teste entrou</label>
+<label><input type="radio" name="q3"> alguém em 192.168.0.10 tentou um usuário que não existe</label>
+<label><input type="radio" name="q3"> o servidor caiu</label>
+<label><input type="radio" name="q3"> a chave expirou</label></div><div class="mc" data-answer="1"><p class="mc-q">4. Em que arquivo, no Debian, ficam os logs de login?</p>
+<label><input type="radio" name="q4"> <code>/var/log/auth.log</code></label>
+<label><input type="radio" name="q4"> <code>~/.ssh/known_hosts</code></label>
+<label><input type="radio" name="q4"> <code>/etc/ssh/sshd_config</code></label>
+<label><input type="radio" name="q4"> <code>/var/log/ssh.txt</code></label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:grep -c;;src:auth.log;;outre:^\d+$">
+<p class="try-task"><strong>Missão:</strong> no servidor, conte quantas vezes alguém entrou com chave. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+sudo grep -c 'Accepted publicke[y]' /var/log/auth.log
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+1
+</pre>
+</div><div class="trycmd" data-goal="src:auth.log;;out:Invalid user">
+<p class="try-task"><strong>Missão:</strong> no servidor, mostre as tentativas com usuários que não existem. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+sudo grep 'Invalid use[r]' /var/log/auth.log
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+2026-11-21T12:03:17.945675-03:00 servidor sshd-session[56]: Invalid user teste from 192.168.0.10 port 49834
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O log é do root (e do grupo adm).</li>
+<li>Os colchetes no grep evitam a linha do sudo.</li>
+<li>Muito <code>Invalid user</code>? fail2ban.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

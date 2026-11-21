@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O que é SSH: cliente, servidor e porta 22 | Guia SSH</title>
+<meta name="description" content="Introdução ao Guia SSH: para que serve o SSH, a diferença entre cliente (ssh) e servidor (sshd), a porta 22 e o formato do comando.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O que é <span class="hl">SSH</span></h1>
+
+<p class="intro">O SSH abre um terminal seguro em outro computador. Esta aula mostra o que ele faz, quem é cliente e quem é servidor, e o formato do comando.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>O que é SSH e por que ele é seguro.</li>
+<li>A diferença entre o cliente <code>ssh</code> e o servidor <code>sshd</code>.</li>
+<li>O formato <code>ssh usuario@computador comando</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: um terminal em outro computador</h2>
+<p>O <strong>SSH</strong> (<em>Secure Shell</em>, “casca segura”) é o jeito padrão de usar o terminal de <strong>outro computador</strong> pela rede. Você digita no seu teclado, e os comandos rodam lá, no servidor. Tudo o que vai e volta é <strong>criptografado</strong>: quem estiver no meio do caminho (o Wi-Fi do café, o provedor) não consegue ler as senhas nem os arquivos.</p>
+<p>É com SSH que se administra quase todo servidor Linux do mundo, que se envia código para o GitHub e que se copiam arquivos entre máquinas. Uma provinha: do notebook da Ana, um comando que roda no servidor e devolve a resposta:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor hostname
+servidor   « quem respondeu foi o servidor
+$ ssh lab@servidor 'whoami; pwd'
+lab
+/home/lab   « a pasta do usuário lab, lá no servidor
+$</pre>
+<hr>
+<h2>Cliente e servidor</h2>
+<p>Toda conexão SSH tem dois lados:</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Lado</th><th>Programa</th><th>Neste guia</th></tr>
+<tr><td><strong>Cliente</strong>: de onde você se conecta</td><td><code>ssh</code> (e <code>scp</code>, <code>sftp</code>, <code>ssh-keygen</code>…)</td><td>o <code>notebook</code>, com a usuária <code>ana</code></td></tr>
+<tr><td><strong>Servidor</strong>: onde os comandos rodam</td><td><code>sshd</code>, o “daemon” que fica esperando conexões na <strong>porta 22</strong></td><td>o <code>servidor</code>, com o usuário <code>lab</code></td></tr>
+</table></div>
+<p>Os dois programas vêm do projeto <strong>OpenSSH</strong>, o mesmo no Linux, no macOS e no Windows 10/11. Veja a versão do seu cliente:</p>
+<pre class="term" data-cwd="~">$ ssh -V
+OpenSSH_10.0p2 Debian-7+deb13u4, OpenSSL 3.5.7 9 Jun 2026   « a versão usada em todo o guia
+$</pre>
+<dl class="anatomy"><dt>ssh</dt><dd>o cliente SSH.</dd><dt>-V</dt><dd>maiúsculo: mostra a versão e sai (o <code>-v</code> minúsculo é outra coisa, “verboso”, e aparece no Nível 5).</dd></dl>
+<p>No servidor, o <code>sshd</code> fica rodando o tempo todo. No laboratório, o usuário <code>lab</code> pode conferir que ele está lá, ouvindo a porta 22:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ps -C sshd -o pid,cmd
+    PID CMD
+     45 sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups
+$</pre>
+<hr>
+<h2>O formato do comando</h2>
+<pre class="cmd">
+ssh usuario@computador comando
+</pre>
+<ul>
+<li><code>usuario</code>: a conta <strong>no servidor</strong> (pode ser diferente do seu usuário no notebook).</li>
+<li><code>computador</code>: o nome ou o IP do servidor (<code>servidor</code>, <code>192.168.0.20</code>…).</li>
+<li><code>comando</code> (opcional): se você passar um comando, ele roda lá e o ssh volta. Sem comando, você entra numa sessão no servidor, como na <a href="primeira-conexao.html">próxima aula</a>.</li>
+</ul>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Nome errado</strong>
+<p>Se o nome do computador estiver errado, o ssh nem chega a tentar conectar. Na coleta, digitamos “servidr”:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidr hostname
+ssh: Could not resolve hostname servidr: Temporary failure in name resolution
+$</pre>
+<p>“Could not resolve hostname” quer dizer: não sei que computador é esse. Confira o nome ou use o IP.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -V</code></td><td>versão do cliente.</td></tr>
+<tr><td><code>ssh usuario@computador</code></td><td>abre uma sessão.</td></tr>
+<tr><td><code>ssh usuario@computador comando</code></td><td>roda um comando e volta.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O cliente</h3><p>Qual programa você roda no seu computador para se conectar?</p><div class="ex-code"><input data-answer="ssh" aria-label="resposta"></div></div><div class="exercise"><h3>2. A versão</h3><p>Complete para ver a versão do cliente:</p><div class="ex-code">ssh <input data-answer="-V" aria-label="resposta"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Em <code>ssh lab@servidor hostname</code>, quem é <code>lab</code>?</p>
+<label><input type="radio" name="q3"> O nome do servidor</label>
+<label><input type="radio" name="q3"> A conta de usuário no servidor</label>
+<label><input type="radio" name="q3"> A senha</label>
+<label><input type="radio" name="q3"> O comando</label></div><div class="mc" data-answer="3"><p class="mc-q">4. Por padrão, o <code>sshd</code> espera conexões na porta:</p>
+<label><input type="radio" name="q4"> 80</label>
+<label><input type="radio" name="q4"> 443</label>
+<label><input type="radio" name="q4"> 22</label>
+<label><input type="radio" name="q4"> 2222</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:\bssh -V\b;;outre:^OpenSSH_\d+\.\d+">
+<p class="try-task"><strong>Missão:</strong> mostre a versão do seu cliente SSH.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -V
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+OpenSSH_10.0p2 Debian-7+deb13u4, OpenSSL 3.5.7 9 Jun 2026
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh\b;;src:hostname;;outre:^conectado em \S+$">
+<p class="try-task"><strong>Missão:</strong> rode no servidor um <code>echo</code> que mostre o nome dele.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'echo conectado em $(hostname)'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+conectado em servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>SSH = terminal seguro em outro computador.</li>
+<li>Cliente <code>ssh</code>, servidor <code>sshd</code>, porta 22.</li>
+<li><code>usuario</code> é a conta no servidor.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Túnel SSH remoto (-R): mostrando o notebook a partir do servidor | Guia SSH</title>
+<meta name="description" content="Túnel SSH remoto com -R: abrir no servidor uma porta que leva a um serviço do notebook, e o GatewayPorts.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Túnel <span class="hl">remoto</span> (-R)</h1>
+
+<p class="intro">O -R é o -L ao contrário: uma porta no servidor que leva ao seu computador.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Abrir um túnel com <code>-R</code>.</li>
+<li>Ver a porta no servidor.</li>
+<li>O que é o <code>GatewayPorts</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: o contrário do -L</h2>
+<p>O <strong>túnel remoto</strong> (<code>-R</code>) abre uma porta <strong>no servidor</strong> que leva até o notebook. Serve para mostrar algo que roda no seu computador (um site em desenvolvimento, por exemplo) a partir do servidor, sem abrir nada no seu roteador.</p>
+<pre class="cmd">
+ssh -R porta_no_servidor:destino:porta_do_destino usuario@servidor
+</pre>
+<p>Agora o <code>destino</code> é visto <strong>a partir do notebook</strong>. No laboratório, a Ana tem um site rodando no notebook, em <code>127.0.0.1:3000</code>.</p>
+<hr>
+<h2>1. Abrindo o túnel remoto</h2>
+<pre class="term" data-cwd="~">$ curl -s http://localhost:3000/
+&lt;h1&gt;Site da Ana&lt;/h1&gt;&lt;p&gt;Rodando no notebook (127.0.0.1:3000).&lt;/p&gt;   « no notebook
+$ ssh -f -N -R 9000:localhost:3000 lab@servidor
+$ ssh lab@servidor 'curl -s http://localhost:9000/'
+&lt;h1&gt;Site da Ana&lt;/h1&gt;&lt;p&gt;Rodando no notebook (127.0.0.1:3000).&lt;/p&gt;
+$</pre>
+<p>A última linha rodou <strong>no servidor</strong> e trouxe a página do notebook.</p>
+<hr>
+<h2>2. Quem enxerga a porta</h2>
+<p>No servidor, a porta 9000 escuta só em <code>127.0.0.1</code>: só quem já está dentro do servidor a usa. Para abrir para a rede do servidor, o administrador teria de ligar <code>GatewayPorts</code> no <code>sshd_config</code> (raramente uma boa ideia).</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -R 9000:localhost:3000 lab@servidor
+$ ssh lab@servidor 'ss -ltn | grep 9000'
+LISTEN 0      128        127.0.0.1:9000      0.0.0.0:*      « só dentro do servidor
+LISTEN 0      128            [::1]:9000         [::]:*   
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A porta do servidor está ocupada</strong>
+<p>Se a porta já estiver em uso no servidor (aqui, por um túnel aberto antes), o servidor recusa e o ssh só avisa:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -R 9000:localhost:3000 lab@servidor
+$ ssh -f -N -R 9000:localhost:3000 lab@servidor
+$</pre>
+<p>Use outra porta no servidor. Lá, <code>ss -ltn</code> mostra o que já está ocupado.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -R 9000:localhost:3000 srv</code></td><td>túnel remoto.</td></tr>
+<tr><td><code>ss -ltn</code></td><td>no servidor, a porta.</td></tr>
+<tr><td><code>GatewayPorts</code></td><td>no sshd: abrir para a rede.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Túnel remoto</h3><p>Que opção abre uma porta no servidor que leva ao notebook?</p><div class="ex-code">ssh -f -N <input data-answer="-R" aria-label="opção"> 9000:localhost:3000 lab@servidor</div></div><div class="exercise"><h3>2. No servidor</h3><p>Complete para baixar, no servidor, a página que veio pelo túnel:</p><div class="ex-code">ssh lab@servidor 'curl -s http://localhost:<input data-answer="9000" aria-label="porta">/'</div></div><div class="mc" data-answer="2"><p class="mc-q">3. No <code>-R 9000:localhost:3000</code>, o <code>localhost</code> é:</p>
+<label><input type="radio" name="q3"> o servidor</label>
+<label><input type="radio" name="q3"> o notebook</label>
+<label><input type="radio" name="q3"> a internet</label>
+<label><input type="radio" name="q3"> o interno</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Por padrão, a porta de um <code>-R</code> no servidor escuta:</p>
+<label><input type="radio" name="q4"> para toda a internet</label>
+<label><input type="radio" name="q4"> só em 127.0.0.1 do servidor</label>
+<label><input type="radio" name="q4"> no notebook</label>
+<label><input type="radio" name="q4"> em lugar nenhum</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-R 9000:localhost:3000;;out:Site da Ana">
+<p class="try-task"><strong>Missão:</strong> com o seu site rodando na porta 3000, mostre-o a partir do servidor por um túnel remoto.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -R 9000:localhost:3000 lab@servidor &amp;&amp; ssh lab@servidor 'curl -s http://localhost:9000/'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Site da Ana&lt;/h1&gt;&lt;p&gt;Rodando no notebook (127.0.0.1:3000).&lt;/p&gt;
+</pre>
+</div><div class="trycmd" data-goal="src:-R 9001;;src:ss -ltn;;outre:^LISTEN\s.*127\.0\.0\.1:9001\s">
+<p class="try-task"><strong>Missão:</strong> abra um túnel remoto na porta 9001 e mostre, no servidor, que ela está escutando.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -R 9001:localhost:3000 lab@servidor &amp;&amp; ssh lab@servidor &quot;ss -ltn | grep ':9001 '&quot;
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+LISTEN 0      128        127.0.0.1:9001      0.0.0.0:*   
+LISTEN 0      128            [::1]:9001         [::]:*   
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>-R servidor:destino:porta</code>.</li>
+<li>O destino é visto pelo notebook.</li>
+<li>A porta escuta só em 127.0.0.1 do servidor.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

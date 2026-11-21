@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>~/.ssh/config avançado: Host *, ordem das regras e Include | Guia SSH</title>
+<meta name="description" content="Regras do ~/.ssh/config: Host * e vários nomes, o primeiro valor vence, ServerAliveInterval e Include de arquivos separados.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Config: curingas, ordem e <span class="hl">Include</span></h1>
+
+<p class="intro">Com vários servidores, o config precisa de regras gerais. Esta aula mostra os curingas, a ordem e o Include.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Usar <code>Host *</code> e vários nomes num bloco.</li>
+<li>Entender que o primeiro valor vence.</li>
+<li>Separar o config com <code>Include</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: regras para muitos servidores</h2>
+<p>O config fica mais poderoso com três recursos: <strong>curingas</strong> (<code>Host *</code>), a regra de <strong>“o primeiro valor vence”</strong> e o <code>Include</code>, que junta vários arquivos.</p>
+<hr>
+<h2>1. Curingas e vários nomes</h2>
+<p><code>Host *</code> vale para todos os servidores; <code>Host srv servidor</code> dá dois nomes ao mesmo bloco. O <code>ServerAliveInterval 60</code> manda um “sinal de vida” a cada 60 segundos, o que evita a queda de conexões paradas:</p>
+<pre class="term" data-cwd="~">$ printf 'Host srv servidor\n    HostName 192.168.0.20\n    User lab\n\nHost *\n    ServerAliveInterval 60\n' &gt; ~/.ssh/config
+$ ssh -G srv | grep -E '^(user|serveraliveinterval) '
+user lab
+serveraliveinterval 60
+$ ssh -G servidor | grep -E '^(user|serveraliveinterval) '
+user lab
+serveraliveinterval 60
+$</pre>
+<hr>
+<h2>2. O primeiro valor vence</h2>
+<p>O ssh lê o arquivo de cima para baixo e fica com o <strong>primeiro</strong> valor de cada opção. Por isso o <code>Host *</code> vai <strong>no fim</strong>, como padrão. O <code>-F</code> lê outro arquivo no lugar do config:</p>
+<pre class="term" data-cwd="~">$ printf 'Host srv\n    User lab\nHost *\n    User ana\n' &gt; certo.conf
+$ printf 'Host *\n    User ana\nHost srv\n    User lab\n' &gt; errado.conf
+$ ssh -F certo.conf -G srv | grep '^user '
+user lab   « o bloco srv veio antes
+$ ssh -F errado.conf -G srv | grep '^user '
+user ana   « o Host * veio antes e ganhou
+$</pre>
+<hr>
+<h2>3. Separar em arquivos: <code>Include</code></h2>
+<p>Com muitos servidores, separe: um arquivo para o trabalho, outro para casa. O <code>Include</code> precisa ficar no <strong>começo</strong> do config:</p>
+<pre class="term" data-cwd="~">$ mkdir -p ~/.ssh/config.d &amp;&amp; printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n' &gt; ~/.ssh/config.d/trabalho.conf &amp;&amp; sed -i '1i Include config.d/*.conf' ~/.ssh/config
+$ head -3 ~/.ssh/config
+Include config.d/*.conf
+Host servidor
+    HostName 192.168.0.20
+$ ssh -G wiki | grep -E '^(hostname|user) '
+user lab
+hostname 192.168.0.130
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Permissão do config</strong>
+<p>O config também precisa ser só seu. Com escrita para outros, o ssh se recusa a ler:</p>
+<pre class="term" data-cwd="~">$ chmod 666 ~/.ssh/config
+$ ssh servidor hostname
+Bad owner or permissions on /home/ana/.ssh/config
+$</pre>
+<p>Corrija com <code>chmod 600 ~/.ssh/config</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>Host *</code></td><td>todos os servidores (no fim).</td></tr>
+<tr><td><code>Host a b</code></td><td>dois nomes.</td></tr>
+<tr><td><code>ServerAliveInterval 60</code></td><td>sinal de vida.</td></tr>
+<tr><td><code>Include config.d/*.conf</code></td><td>outros arquivos (no começo).</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Para todos</h3><p>Complete o bloco que vale para todos os servidores:</p><div class="ex-code">Host <input data-answer="*" aria-label="resposta"></div></div><div class="exercise"><h3>2. Sinal de vida</h3><p>Que opção manda um sinal de vida a cada N segundos?</p><div class="ex-code">    <input data-answer="ServerAliveInterval" aria-label="opção"> 60</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Onde deve ficar o <code>Host *</code>?</p>
+<label><input type="radio" name="q3"> No começo do arquivo</label>
+<label><input type="radio" name="q3"> No fim, como padrão</label>
+<label><input type="radio" name="q3"> Em qualquer lugar, dá no mesmo</label>
+<label><input type="radio" name="q3"> Só no servidor</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Duas linhas <code>User</code> valem para o mesmo servidor. Qual ganha?</p>
+<label><input type="radio" name="q4"> A última</label>
+<label><input type="radio" name="q4"> A primeira</label>
+<label><input type="radio" name="q4"> As duas</label>
+<label><input type="radio" name="q4"> Nenhuma</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh -G;;outre:^serveraliveinterval \d+$">
+<p class="try-task"><strong>Missão:</strong> mostre o valor do <code>ServerAliveInterval</code> que o ssh usaria para o servidor.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -G servidor | grep -i '^serveraliveinterval'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+serveraliveinterval 0
+</pre>
+</div><div class="trycmd" data-goal="src:-o ServerAliveInterval=30;;outre:^serveraliveinterval 30$">
+<p class="try-task"><strong>Missão:</strong> mude o <code>ServerAliveInterval</code> só nesta conexão (com <code>-o</code>) e confira com <code>-G</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o ServerAliveInterval=30 -G servidor | grep -i '^serveraliveinterval'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+serveraliveinterval 30
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O primeiro valor vence.</li>
+<li><code>Host *</code> no fim, <code>Include</code> no começo.</li>
+<li>O config precisa de permissão 600.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

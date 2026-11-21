@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto SSH: ProxyJump e LocalForward para um site interno | Guia SSH</title>
+<meta name="description" content="Projeto final: abrir no notebook um site de uma máquina interna, com ProxyJump e LocalForward guardados no ~/.ssh/config.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto: <span class="hl">túnel</span> para a wiki</h1>
+
+<p class="intro">Um site que só a rede interna enxerga, aberto no notebook com um comando.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Juntar ProxyJump e LocalForward.</li>
+<li>Abrir e fechar o túnel.</li>
+<li>Entender o caminho.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>O projeto</h2>
+<p>A wiki da empresa roda na máquina <code>interno</code>, que só a rede do servidor enxerga. O objetivo: abrir a wiki no navegador do notebook com <strong>um comando</strong>, pulando pelo servidor e com um túnel, tudo guardado no config.</p>
+<hr>
+<h2>1. O ponto de partida</h2>
+<pre class="term" data-cwd="~">$ curl -sS --max-time 3 http://192.168.0.130/
+curl: (7) Failed to connect to 192.168.0.130 port 80 after 0 ms: Could not connect to server
+$ ssh interno 'curl -s http://localhost/'
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;   « lá dentro ela existe
+$</pre>
+<hr>
+<h2>2. O bloco no config</h2>
+<pre class="term" data-cwd="~">$ printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n    ProxyJump servidor\n    LocalForward 8090 localhost:80\n    ExitOnForwardFailure yes\n' &gt;&gt; ~/.ssh/config
+$ ssh -G wiki | grep -E '^(hostname|proxyjump|localforward) '
+hostname 192.168.0.130
+localforward 8090 [localhost]:80
+proxyjump servidor
+$</pre>
+<hr>
+<h2>3. Abrindo, usando e fechando</h2>
+<pre class="term" data-cwd="~">$ ssh -f -N wiki
+$ curl -s http://localhost:8090/
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;   « no notebook, pela porta 8090
+$ pgrep -a ssh
+55 ssh -W [192.168.0.130]:22 servidor
+56 ssh -f -N wiki
+$ pkill -f 'ssh -f -N wiki'
+$</pre>
+<p>O segundo processo, <code>ssh -W</code>, é o salto pelo servidor que o <code>ProxyJump</code> abriu sozinho; ele termina junto com o túnel. No navegador, <code>http://localhost:8090</code>. O caminho: notebook → (SSH) → servidor → (SSH) → interno → wiki. Os dois trechos da rede vão criptografados.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Abriu duas vezes</strong>
+<p>Com <code>ExitOnForwardFailure</code>, o segundo túnel na mesma porta desiste em vez de ficar conectado à toa:</p>
+<pre class="term" data-cwd="~">$ printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n    ProxyJump servidor\n    LocalForward 8090 localhost:80\n    ExitOnForwardFailure yes\n' &gt;&gt; ~/.ssh/config
+$ ssh -f -N wiki
+$ ssh -f -N wiki; echo &quot;código: $?&quot;
+bind [127.0.0.1]:8090: Address already in use
+channel_setup_fwd_listener_tcpip: cannot listen to port: 8090
+Could not request local forwarding.
+código: 255
+$</pre>
+<p>Feche o primeiro (<code>pkill -f 'ssh -f -N wiki'</code>) ou use outra porta.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ProxyJump servidor</code></td><td>passa pelo servidor.</td></tr>
+<tr><td><code>LocalForward 8090 localhost:80</code></td><td>o túnel.</td></tr>
+<tr><td><code>ssh -f -N wiki</code></td><td>abre.</td></tr>
+<tr><td><code>pkill -f 'ssh -f -N wiki'</code></td><td>fecha.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O salto</h3><p>Que linha do config faz passar pelo servidor?</p><div class="ex-code"><input data-answer="ProxyJump" aria-label="opção"> servidor</div></div><div class="exercise"><h3>2. O túnel</h3><p>Que linha do config abre o túnel local?</p><div class="ex-code"><input data-answer="LocalForward" aria-label="opção"> 8090 localhost:80</div></div><div class="mc" data-answer="3"><p class="mc-q">3. Em <code>LocalForward 8090 localhost:80</code> dentro de <code>Host wiki</code>, o <code>localhost</code> é:</p>
+<label><input type="radio" name="q3"> o notebook</label>
+<label><input type="radio" name="q3"> o servidor</label>
+<label><input type="radio" name="q3"> a máquina interno</label>
+<label><input type="radio" name="q3"> a internet</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-L 8090;;out:Wiki interna">
+<p class="try-task"><strong>Missão:</strong> abra um túnel até a wiki da máquina interno e leia a página no notebook.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 8090:localhost:80 interno &amp;&amp; curl -s http://localhost:8090/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;
+</pre>
+</div><div class="trycmd" data-goal="src:-J servidor;;out:Wiki interna">
+<p class="try-task"><strong>Missão:</strong> leia a wiki pulando pelo servidor, sem túnel, rodando o curl lá dentro.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -J servidor lab@192.168.0.130 'curl -s http://localhost/'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Tudo num bloco do config.</li>
+<li>O destino do LocalForward é visto pelo último salto.</li>
+<li>Feche o que não usa.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

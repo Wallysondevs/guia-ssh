@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O servidor sshd: processo, porta, sshd_config e sshd -T | Guia SSH</title>
+<meta name="description" content="Conhecer o servidor SSH: o processo sshd, a porta 22, os arquivos de /etc/ssh, o Include de sshd_config.d e a configuração final com sshd -T.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O servidor <span class="hl">sshd</span></h1>
+
+<p class="intro">Do outro lado de cada conexão está o sshd. Esta aula mostra onde ele mora e como ler a configuração dele.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Achar o processo e a porta do sshd.</li>
+<li>Diferenciar <code>sshd_config</code> de <code>ssh_config</code>.</li>
+<li>Ler a configuração final com <code>sshd -T</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Quem atende do outro lado</h2>
+<p>Até aqui você usou o <strong>cliente</strong> (<code>ssh</code>, <code>scp</code>, <code>sftp</code>). Do outro lado está o <strong>servidor</strong>, o programa <code>sshd</code> (o “d” é de <em>daemon</em>, um programa que fica rodando em segundo plano). No Debian e no Ubuntu ele vem no pacote <code>openssh-server</code> e o serviço se chama <code>ssh</code>.</p>
+<pre class="cmd">
+sudo apt install openssh-server     # instala o servidor
+sudo systemctl status ssh           # está rodando?
+</pre>
+<hr>
+<h2>1. O processo e a porta</h2>
+<p>Nesta aula os comandos rodam <strong>no servidor</strong>, como <code>lab</code>:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ps -C sshd -o pid,cmd
+    PID CMD
+     45 sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups   « o processo que espera conexões
+$ sudo ss -ltnp | grep sshd
+LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:((&quot;sshd&quot;,pid=45,fd=6))      « a porta padrão do SSH
+LISTEN 0      128             [::]:22           [::]:*    users:((&quot;sshd&quot;,pid=45,fd=7))   
+$</pre>
+<hr>
+<h2>2. Os arquivos</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ls /etc/ssh
+moduli	      sshd_config	  ssh_host_ecdsa_key.pub    ssh_host_rsa_key   « a configuração do servidor
+ssh_config    sshd_config.d	  ssh_host_ed25519_key	    ssh_host_rsa_key.pub   « a do cliente (sem o d)
+ssh_config.d  ssh_host_ecdsa_key  ssh_host_ed25519_key.pub   « a chave do servidor, a do fingerprint
+$</pre>
+<p>Cuidado com a letra: <code>sshd_config</code> é o <strong>servidor</strong>; <code>ssh_config</code> é o <strong>cliente</strong>. O arquivo principal quase não tem nada ativo; o resto são comentários com os valores padrão:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ grep -Ev '^(#|$)' /etc/ssh/sshd_config
+Include /etc/ssh/sshd_config.d/*.conf   « lê os arquivos da pasta sshd_config.d primeiro
+KbdInteractiveAuthentication no
+UsePAM yes
+X11Forwarding yes
+PrintMotd no
+AcceptEnv LANG LC_* COLORTERM NO_COLOR
+Subsystem	sftp	/usr/lib/openssh/sftp-server
+$</pre>
+<div class="tip"><strong>A primeira vez vale</strong><p>No <code>sshd_config</code>, para a maioria das opções, vale o <strong>primeiro</strong> valor que o sshd encontra. Como o <code>Include</code> está no topo, um arquivo seu em <code>/etc/ssh/sshd_config.d/</code> ganha do resto. É lá que as próximas aulas mexem, sem tocar no arquivo original.</p></div>
+<hr>
+<h2>3. O que está valendo de verdade</h2>
+<p>O <code>sshd -T</code> mostra a configuração final, já com os padrões e os arquivos incluídos, tudo em minúsculas:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo sshd -T | grep -E '^(port|passwordauthentication|pubkeyauthentication|permitrootlogin) '
+port 22
+permitrootlogin without-password   « root só entra com chave
+pubkeyauthentication yes
+passwordauthentication yes   « senha ainda aceita
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Sem sudo</strong>
+<p>O programa <code>sshd</code> fica em <code>/usr/sbin</code>, pasta que não está no <code>PATH</code> de um usuário comum no Debian:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sshd -T | head -n 3
+bash: sshd: comando não encontrado
+$</pre>
+<p>Use <code>sudo sshd -T</code>: o sudo procura também em <code>/usr/sbin</code>, e o <code>sshd -T</code> precisa ler as chaves privadas do servidor (<code>ssh_host_*_key</code>, sem <code>.pub</code>), que só o root lê.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>sudo systemctl status ssh</code></td><td>o serviço.</td></tr>
+<tr><td><code>/etc/ssh/sshd_config</code></td><td>configuração do servidor.</td></tr>
+<tr><td><code>/etc/ssh/sshd_config.d/</code></td><td>os seus arquivos.</td></tr>
+<tr><td><code>sudo sshd -T</code></td><td>a configuração final.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O pacote</h3><p>Complete para instalar o servidor SSH:</p><div class="ex-code">sudo apt install <input data-answer="openssh-server" aria-label="resposta"></div></div><div class="exercise"><h3>2. A configuração final</h3><p>Que opção do sshd mostra a configuração que está valendo?</p><div class="ex-code">sudo sshd <input data-answer="-T" aria-label="opção"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Qual arquivo configura o <strong>servidor</strong>?</p>
+<label><input type="radio" name="q3"> <code>/etc/ssh/ssh_config</code></label>
+<label><input type="radio" name="q3"> <code>/etc/ssh/sshd_config</code></label>
+<label><input type="radio" name="q3"> <code>~/.ssh/config</code></label>
+<label><input type="radio" name="q3"> <code>~/.ssh/known_hosts</code></label></div><div class="mc" data-answer="2"><p class="mc-q">4. Por que criar arquivos em <code>sshd_config.d/</code>?</p>
+<label><input type="radio" name="q4"> é obrigatório</label>
+<label><input type="radio" name="q4"> eles são lidos primeiro e o primeiro valor vale</label>
+<label><input type="radio" name="q4"> o sshd ignora o arquivo principal</label>
+<label><input type="radio" name="q4"> fica mais rápido</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:sshd -T;;outre:^port \d+$">
+<p class="try-task"><strong>Missão:</strong> no servidor, mostre em que porta o sshd escuta, segundo a configuração final. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+sudo sshd -T | grep '^port '
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+port 22
+</pre>
+</div><div class="trycmd" data-goal="src:sshd_config;;outre:^Include /etc/ssh/sshd_config\.d/">
+<p class="try-task"><strong>Missão:</strong> no servidor, mostre a linha que inclui a pasta <code>sshd_config.d</code>. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+grep '^Include' /etc/ssh/sshd_config
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Include /etc/ssh/sshd_config.d/*.conf
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O servidor é o <code>sshd</code>, pacote <code>openssh-server</code>.</li>
+<li>Mexa em <code>sshd_config.d/</code>, que é lido primeiro.</li>
+<li><code>sshd -T</code> mostra o que vale.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

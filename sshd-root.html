@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PermitRootLogin: proibir o login do root por SSH | Guia SSH</title>
+<meta name="description" content="O PermitRootLogin do sshd: o padrão prohibit-password, proibir o root com PermitRootLogin no e usar um usuário com sudo.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O login do <span class="hl">root</span></h1>
+
+<p class="intro">O root é o primeiro nome que os robôs tentam. O melhor é ele nem entrar por SSH.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Ler o <code>PermitRootLogin</code>.</li>
+<li>Proibir o root.</li>
+<li>Usar <code>sudo</code> por SSH.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>O root e o SSH</h2>
+<p>O <code>root</code> existe em todo Linux, então é o primeiro nome que os robôs tentam. O padrão do OpenSSH é <code>PermitRootLogin prohibit-password</code>: o root pode entrar, mas <strong>só com chave</strong>. O mais comum é ir além e proibir de vez, entrando como um usuário comum e usando <code>sudo</code>.</p>
+<hr>
+<h2>1. Como está</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo sshd -T | grep '^permitrootlogin'
+permitrootlogin without-password   « o nome antigo de prohibit-password
+$</pre>
+<p>No laboratório, a chave da ana foi posta também no <code>/root/.ssh/authorized_keys</code> do servidor. Com o padrão, ela entra como root:</p>
+<pre class="term" data-cwd="~">$ ssh root@servidor 'whoami; hostname'
+root   « entrou como root, com a chave
+servidor
+$</pre>
+<hr>
+<h2>2. Proibindo</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ echo 'PermitRootLogin no' | sudo tee /etc/ssh/sshd_config.d/20-sem-root.conf
+PermitRootLogin no
+$ sudo sshd -t &amp;&amp; sudo kill -HUP &quot;$(cat /run/sshd.pid)&quot;
+$ sudo sshd -T | grep '^permitrootlogin'
+permitrootlogin no   « agora vale
+$</pre>
+<p>Do notebook, a mesma chave já não serve para o root. O <code>BatchMode=yes</code> faz o ssh desistir em vez de perguntar a senha:</p>
+<pre class="term" data-cwd="~">$ ssh -o BatchMode=yes root@servidor hostname
+root@servidor: Permission denied (publickey,password).   « root barrado
+$ ssh lab@servidor 'sudo whoami'
+root   « como lab, o sudo ainda chega no root
+$</pre>
+<div class="note"><strong>sudo sem senha?</strong><p>No laboratório, o <code>lab</code> usa <code>sudo</code> sem senha para as aulas andarem. Num servidor de verdade o <code>sudo</code> pede a senha do usuário; para ele perguntar por SSH, use <code>ssh -t lab@servidor 'sudo comando'</code> (o <code>-t</code> dá um terminal para a pergunta).</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Trancado do lado de fora</strong>
+<p>Se o root era o único jeito de entrar e você proibiu, o servidor recusa até a chave certa:</p>
+<pre class="term" data-cwd="~">$ ssh root@servidor
+root@servidor: Permission denied (publickey).
+$</pre>
+<p>Por isso: crie antes um usuário comum com <code>sudo</code>, entre com ele numa segunda janela e só então proíba o root. Se trancar mesmo assim, só o console do provedor (ou o teclado do servidor) resolve.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>PermitRootLogin no</code></td><td>root não entra.</td></tr>
+<tr><td><code>prohibit-password</code></td><td>o padrão: só com chave.</td></tr>
+<tr><td><code>ssh -t srv 'sudo cmd'</code></td><td>sudo com pergunta.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Proibir o root</h3><p>Complete a linha que proíbe o root por SSH:</p><div class="ex-code">PermitRootLogin <input data-answer="no" aria-label="resposta"></div></div><div class="exercise"><h3>2. Terminal para o sudo</h3><p>Que opção do ssh dá um terminal para o sudo perguntar a senha?</p><div class="ex-code">ssh <input data-answer="-t" aria-label="opção"> lab@servidor 'sudo apt update'</div></div><div class="mc" data-answer="2"><p class="mc-q">3. O padrão <code>prohibit-password</code> quer dizer:</p>
+<label><input type="radio" name="q3"> root nunca entra</label>
+<label><input type="radio" name="q3"> root entra só com chave</label>
+<label><input type="radio" name="q3"> root entra só com senha</label>
+<label><input type="radio" name="q3"> qualquer um entra como root</label></div><div class="mc" data-answer="1"><p class="mc-q">4. Antes de proibir o root, você precisa:</p>
+<label><input type="radio" name="q4"> de um usuário comum com sudo que já entra</label>
+<label><input type="radio" name="q4"> apagar o authorized_keys</label>
+<label><input type="radio" name="q4"> trocar a porta</label>
+<label><input type="radio" name="q4"> desligar o fail2ban</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:sshd -T;;outre:^permitrootlogin \S+$">
+<p class="try-task"><strong>Missão:</strong> no servidor, mostre o valor do <code>permitrootlogin</code> que está valendo. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+sudo sshd -T | grep '^permitrootlogin'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+permitrootlogin without-password
+</pre>
+</div><div class="trycmd" data-goal="src:root@servidor;;out:Permission denied">
+<p class="try-task"><strong>Missão:</strong> com o root proibido no servidor, tente entrar como root sem perguntar senha.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o BatchMode=yes root@servidor hostname
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+root@servidor: Permission denied (publickey,password).
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Entre com usuário comum e use sudo.</li>
+<li>Crie o usuário antes de proibir o root.</li>
+<li><code>without-password</code> é o mesmo que <code>prohibit-password</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rodando comandos remotos com ssh: aspas, pipes e -t | Guia SSH</title>
+<meta name="description" content="Rodar um comando no servidor sem abrir sessão: aspas simples, pipes no notebook e no servidor, código de saída e o -t.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Comandos <span class="hl">remotos</span></h1>
+
+<p class="intro">Um comando depois do endereço roda no servidor e volta. O segredo está nas aspas: elas decidem quem expande o quê.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Rodar um comando remoto e trazer a saída.</li>
+<li>Usar aspas para o comando chegar intacto.</li>
+<li>Pipes, redirecionamento e o <code>-t</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: um comando, sem entrar</h2>
+<p>Muitas vezes você só quer <strong>uma resposta</strong> do servidor. Ponha o comando depois do endereço: o ssh conecta, roda, mostra a saída e volta. Daqui em diante, o notebook da Ana já tem <a href="ssh-keygen.html">chave SSH</a> instalada no servidor, então não aparece a pergunta da senha.</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor hostname
+servidor
+$ ssh lab@servidor ls
+relatorio.txt
+site
+$ ssh lab@servidor cat relatorio.txt
+Relatório mensal
+vendas: 42
+clientes novos: 7
+$</pre>
+<hr>
+<h2>1. As aspas: quem expande o quê</h2>
+<p>O Bash do <strong>notebook</strong> lê o comando antes do ssh. Sem aspas simples, ele troca <code>$HOSTNAME</code> pelo nome do notebook antes de mandar. Com aspas simples, o texto vai intacto e quem expande é o Bash do servidor:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor echo $HOSTNAME
+notebook   « expandido no notebook!
+$ ssh lab@servidor 'echo $HOSTNAME'
+servidor   « expandido no servidor
+$</pre>
+<div class="tip"><strong>Regra prática</strong><p>Ponha o comando remoto entre <strong>aspas simples</strong>. Assim ele chega ao servidor exatamente como você escreveu.</p></div>
+<hr>
+<h2>2. Pipes dos dois lados</h2>
+<p>Um <code>|</code> fora das aspas roda <strong>no notebook</strong>, com a saída que veio do servidor. Dentro das aspas, roda <strong>no servidor</strong>. O resultado é o mesmo; muda onde o trabalho acontece:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor 'cat relatorio.txt' | grep vendas
+vendas: 42
+$ ssh lab@servidor 'grep vendas relatorio.txt'
+vendas: 42
+$ ssh lab@servidor 'cat relatorio.txt' &gt; copia.txt
+$ cat copia.txt
+Relatório mensal
+vendas: 42
+clientes novos: 7
+$</pre>
+<p>O <code>&gt; copia.txt</code> fora das aspas gravou a saída do servidor num arquivo <strong>do notebook</strong>: um jeito simples de trazer um arquivo de texto.</p>
+<hr>
+<h2>3. O código de saída e o terminal</h2>
+<p>O ssh devolve o código de saída do comando remoto, então dá para usar em scripts com <code>&amp;&amp;</code> e <code>if</code>:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor 'ls naoexiste'; echo &quot;código: $?&quot;
+ls: não foi possível acessar 'naoexiste': Arquivo ou diretório inexistente
+código: 2
+$</pre>
+<p>Um comando remoto não ganha um terminal de verdade (um “tty”). Programas de tela cheia, como <code>top</code> ou <code>nano</code>, precisam de um: peça com <code>-t</code>.</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor tty
+não é um tty   « sem -t, não há terminal
+$ ssh -t lab@servidor tty
+/dev/pts/1   « com -t, há
+Connection to servidor closed.
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Esqueci as aspas no &&</strong>
+<p>Sem aspas, o <code>&amp;&amp;</code> é do Bash do notebook: só o <code>cd</code> foi para o servidor, e o <code>pwd</code> rodou no notebook:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor cd /etc &amp;&amp; pwd
+/home/ana
+$</pre>
+<p>Com aspas, <code>ssh lab@servidor 'cd /etc &amp;&amp; pwd'</code> roda os dois no servidor e mostra <code>/etc</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh lab@servidor 'comando'</code></td><td>roda no servidor.</td></tr>
+<tr><td><code>ssh lab@servidor 'cmd' | grep x</code></td><td>grep no notebook.</td></tr>
+<tr><td><code>ssh lab@servidor 'cmd' &gt; arq</code></td><td>grava no notebook.</td></tr>
+<tr><td><code>ssh -t lab@servidor top</code></td><td>com terminal.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Aspas</h3><p>Que tipo de aspas manda o comando intacto para o servidor?</p><div class="ex-code"><input data-answer="simples|aspas simples|'" aria-label="resposta"></div></div><div class="exercise"><h3>2. Terminal</h3><p>Complete para pedir um terminal para o comando remoto:</p><div class="ex-code">ssh <input data-answer="-t" aria-label="opção"> lab@servidor top</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Em <code>ssh lab@servidor 'cat relatorio.txt' | grep vendas</code>, o <code>grep</code> roda:</p>
+<label><input type="radio" name="q3"> no servidor</label>
+<label><input type="radio" name="q3"> no notebook</label>
+<label><input type="radio" name="q3"> nos dois</label>
+<label><input type="radio" name="q3"> em nenhum</label></div><div class="mc" data-answer="2"><p class="mc-q">4. <code>ssh lab@servidor echo $HOSTNAME</code> mostra:</p>
+<label><input type="radio" name="q4"> o nome do servidor</label>
+<label><input type="radio" name="q4"> o nome do notebook</label>
+<label><input type="radio" name="q4"> um erro</label>
+<label><input type="radio" name="q4"> nada</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^ssh\b;;src:'[^']*\$HOSTNAME[^']*';;outre:^remoto: [^$\s]+$">
+<p class="try-task"><strong>Missão:</strong> faça o servidor dizer o próprio nome, com a variável <code>$HOSTNAME</code> expandida lá.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'echo &quot;remoto: $HOSTNAME&quot;'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+remoto: servidor
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh\b;;src:\$\?;;outre:^código: 2$">
+<p class="try-task"><strong>Missão:</strong> rode um <code>ls</code> de um arquivo que não existe no servidor e mostre o código de saída que o ssh devolveu.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'ls naoexiste'; echo &quot;código: $?&quot;
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+ls: não foi possível acessar 'naoexiste': Arquivo ou diretório inexistente
+código: 2
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Aspas simples: o comando chega intacto.</li>
+<li>Fora das aspas, pipes e <code>&gt;</code> são do notebook.</li>
+<li><code>-t</code> para programas de tela cheia.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

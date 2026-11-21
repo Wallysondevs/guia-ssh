@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipes pelo SSH: tar pelo cano, backups e diff remoto | Guia SSH</title>
+<meta name="description" content="Usar pipes através do SSH: enviar e trazer pastas com tar pelo cano, backups sem arquivo temporário e diff entre arquivo local e remoto.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Pipes pela <span class="hl">rede</span></h1>
+
+<p class="intro">O cano do Bash atravessa a rede com o ssh. Esta aula mostra receitas clássicas com tar e diff.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Enviar uma pasta com <code>tar | ssh</code>.</li>
+<li>Trazer um backup com <code>ssh … &gt;</code>.</li>
+<li>Comparar arquivos com <code>diff &lt;(ssh …)</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: o cano atravessa a rede</h2>
+<p>O ssh liga a entrada e a saída do comando remoto às do notebook. Então dá para usar o <code>|</code> através da rede: o que um programa escreve no notebook chega como entrada de outro programa no servidor, e vice-versa. Sem arquivo temporário.</p>
+<hr>
+<h2>1. Enviar uma pasta compactada</h2>
+<p>O <code>tar czf -</code> compacta a pasta e escreve no cano (o <code>-</code> é a saída padrão). No servidor, o <code>tar xzf -</code> lê do cano e extrai:</p>
+<pre class="term" data-cwd="~">$ tar czf - projeto | ssh lab@servidor 'mkdir -p backup &amp;&amp; tar xzf - -C backup'
+$ ssh lab@servidor 'ls -R backup'
+backup:
+projeto
+
+backup/projeto:
+estilo.css
+img
+index.html
+README.md
+
+backup/projeto/img:
+logo.png
+$</pre>
+<hr>
+<h2>2. Trazer um backup do servidor</h2>
+<pre class="term" data-cwd="~">$ ssh lab@servidor 'tar czf - site relatorio.txt' &gt; backup-servidor.tar.gz
+$ tar tzf backup-servidor.tar.gz
+site/
+site/index.html
+relatorio.txt
+$ ls -l backup-servidor.tar.gz
+-rw-r--r-- 1 ana ana 297 nov 21 12:02 backup-servidor.tar.gz
+$</pre>
+<hr>
+<h2>3. Comparar um arquivo local com o remoto</h2>
+<p>O <code>&lt;(…)</code> do Bash faz a saída de um comando parecer um arquivo. Com ele, o <code>diff</code> compara o relatório do servidor com uma cópia local alterada:</p>
+<pre class="term" data-cwd="~">$ diff &lt;(ssh lab@servidor cat relatorio.txt) relatorio-local.txt
+2c2
+&lt; vendas: 42   « no servidor
+---
+&gt; vendas: 45   « no notebook
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Faltou o “-” do tar</strong>
+<p>Sem o <code>-</code>, o <code>tar czf projeto</code> entende <code>projeto</code> como o nome do arquivo a <strong>criar</strong>, e não tem nada para pôr nele:</p>
+<pre class="term" data-cwd="~">$ tar czf projeto | ssh lab@servidor 'tar tzf -'
+tar: Cowardly refusing to create an empty archive
+Try 'tar --help' or 'tar --usage' for more information.
+
+gzip: stdin: unexpected end of file
+tar: Child returned status 1
+tar: Error is not recoverable: exiting now
+$</pre>
+<p>O <code>f -</code> é o que manda o tar escrever no cano: <code>tar czf - projeto</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>tar czf - pasta | ssh srv 'tar xzf -'</code></td><td>envia.</td></tr>
+<tr><td><code>ssh srv 'tar czf - pasta' &gt; b.tgz</code></td><td>traz.</td></tr>
+<tr><td><code>diff &lt;(ssh srv cat a) b</code></td><td>compara.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O cano</h3><p>No <code>tar czf - projeto</code>, o que manda o tar escrever na saída?</p><div class="ex-code">tar czf <input data-answer="-" aria-label="símbolo"> projeto</div></div><div class="exercise"><h3>2. Extrair lá</h3><p>Complete o lado do servidor:</p><div class="ex-code">ssh lab@servidor 'tar <input data-answer="xzf" aria-label="opções"> -'</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Em <code>ssh srv 'tar czf - site' &gt; b.tar.gz</code>, o arquivo b.tar.gz fica:</p>
+<label><input type="radio" name="q3"> no servidor</label>
+<label><input type="radio" name="q3"> no notebook</label>
+<label><input type="radio" name="q3"> nos dois</label>
+<label><input type="radio" name="q3"> em lugar nenhum</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Por que usar tar pelo cano em vez de scp -r?</p>
+<label><input type="radio" name="q4"> É obrigatório</label>
+<label><input type="radio" name="q4"> Compacta e manda tudo num fluxo só, sem arquivo temporário</label>
+<label><input type="radio" name="q4"> É mais seguro</label>
+<label><input type="radio" name="q4"> Não usa SSH</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:tar czf -;;src:tar xzvf -;;outre:^relatorio\.txt$">
+<p class="try-task"><strong>Missão:</strong> traga o <code>relatorio.txt</code> do servidor por um tar no cano e extraia no notebook mostrando o nome.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'tar czf - relatorio.txt' | tar xzvf -
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+relatorio.txt
+</pre>
+</div><div class="trycmd" data-goal="src:\|\s*wc -l;;outre:^3$">
+<p class="try-task"><strong>Missão:</strong> conte as linhas do relatório do servidor com o <code>wc</code> rodando no notebook.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'cat relatorio.txt' | wc -l
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+3
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O <code>-</code> do tar é o cano.</li>
+<li>O <code>&gt;</code> fora das aspas grava no notebook.</li>
+<li><code>&lt;(…)</code> vira um arquivo para o diff.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

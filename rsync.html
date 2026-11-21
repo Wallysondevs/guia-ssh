@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rsync pelo SSH: -av, --dry-run, --delete e a barra no fim | Guia SSH</title>
+<meta name="description" content="Sincronizar pastas com rsync pelo SSH: -av, cópia só do que mudou, --dry-run, --delete, -e e a diferença da barra no fim.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Sincronizando com <span class="hl">rsync</span></h1>
+
+<p class="intro">O rsync copia só o que mudou. É a ferramenta de backup e de publicação mais usada com SSH.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Sincronizar com <code>rsync -av</code>.</li>
+<li>Ensaiar com <code>--dry-run</code> antes do <code>--delete</code>.</li>
+<li>Entender a barra no fim da origem.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: copiar só o que mudou</h2>
+<p>O <code>rsync</code> sincroniza pastas: na primeira vez copia tudo; nas seguintes, só o que mudou. Por isso é o preferido para backups e para mandar um site para o servidor. Ele usa o SSH como transporte (e precisa estar instalado nos dois lados: <code>sudo apt install rsync</code>).</p>
+<hr>
+<h2>1. A primeira cópia e a segunda</h2>
+<pre class="term" data-cwd="~">$ rsync -av projeto/ lab@servidor:projeto/
+sending incremental file list
+created directory projeto
+./
+README.md
+estilo.css
+index.html
+img/
+img/logo.png   « a primeira vez: tudo
+
+sent 2.483 bytes  received 137 bytes  5.240,00 bytes/sec   « a segunda: nada a copiar
+total size is 2.118  speedup is 0,81
+$ rsync -av projeto/ lab@servidor:projeto/
+sending incremental file list
+
+sent 175 bytes  received 13 bytes  376,00 bytes/sec
+total size is 2.118  speedup is 11,27
+$</pre>
+<dl class="anatomy"><dt>-a</dt><dd>“arquivo”: copia pastas, mantém datas e permissões.</dd><dt>-v</dt><dd>mostra o que está copiando.</dd><dt>projeto/</dt><dd>com barra no fim: o <strong>conteúdo</strong> da pasta.</dd><dt>lab@servidor:projeto/</dt><dd>o destino, no formato do scp.</dd></dl>
+<hr>
+<h2>2. Só o que mudou</h2>
+<pre class="term" data-cwd="~">$ rsync -a projeto/ lab@servidor:projeto/
+$ echo 'p { margin: 0; }' &gt;&gt; projeto/estilo.css
+$ rsync -av projeto/ lab@servidor:projeto/
+sending incremental file list
+estilo.css   « só o arquivo alterado
+
+sent 269 bytes  received 42 bytes  622,00 bytes/sec
+total size is 2.135  speedup is 6,86
+$</pre>
+<hr>
+<h2>3. Ensaiar antes: <code>--dry-run</code> e <code>--delete</code></h2>
+<p>O <code>--delete</code> apaga no destino o que não existe mais na origem: o destino fica <strong>igual</strong>. É poderoso e perigoso. Ensaie com <code>--dry-run</code> (ou <code>-n</code>), que só mostra o que faria. Aqui, a Ana apagou o <code>estilo.css</code> do notebook depois de uma cópia:</p>
+<pre class="term" data-cwd="~">$ rsync -av --delete --dry-run projeto/ lab@servidor:projeto/
+sending incremental file list
+deleting estilo.css   « o que o --delete apaga
+./
+
+sent 168 bytes  received 41 bytes  418,00 bytes/sec
+total size is 2.096  speedup is 10,03 (DRY RUN)   « ensaio: nada foi apagado ainda
+$ ssh lab@servidor 'ls projeto'
+estilo.css
+img
+index.html
+README.md
+$ rsync -av --delete projeto/ lab@servidor:projeto/
+sending incremental file list
+deleting estilo.css
+./
+
+sent 168 bytes  received 41 bytes  418,00 bytes/sec
+total size is 2.096  speedup is 10,03
+$ ssh lab@servidor 'ls projeto'
+img
+index.html
+README.md
+$</pre>
+<div class="tip"><strong>-e: escolher como conectar</strong><p>O <code>-e</code> passa opções ao ssh, como a porta ou a chave: <code>rsync -av -e 'ssh -p 2222 -i ~/.ssh/servidor_lab' projeto/ lab@servidor:projeto/</code>. Com o <a href="ssh-config.html">config</a>, nem precisa: o apelido já traz tudo.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A barra no fim muda tudo</strong>
+<p><code>projeto</code> (sem barra) copia a <strong>pasta</strong>; <code>projeto/</code> (com barra) copia o <strong>conteúdo</strong>. Errar isso cria uma pasta dentro da outra:</p>
+<pre class="term" data-cwd="~">$ rsync -a projeto lab@servidor:copia1/
+$ rsync -a projeto/ lab@servidor:copia2/
+$ ssh lab@servidor 'ls copia1 copia2'
+copia1:
+projeto
+
+copia2:
+estilo.css
+img
+index.html
+README.md
+$</pre>
+<p>Na dúvida, use barra nos dois lados (<code>origem/ destino/</code>) e ensaie com <code>-n</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>rsync -av orig/ srv:dest/</code></td><td>sincroniza.</td></tr>
+<tr><td><code>-n / --dry-run</code></td><td>ensaio.</td></tr>
+<tr><td><code>--delete</code></td><td>espelha (apaga no destino).</td></tr>
+<tr><td><code>-e 'ssh -p 2222'</code></td><td>opções do ssh.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Ensaiar</h3><p>Que opção do rsync só mostra o que faria?</p><div class="ex-code">rsync -av <input data-answer="--dry-run" aria-label="opção"> projeto/ lab@servidor:projeto/</div></div><div class="exercise"><h3>2. Espelhar</h3><p>Que opção apaga no destino o que sumiu da origem?</p><div class="ex-code">rsync -av <input data-answer="--delete" aria-label="opção"> projeto/ lab@servidor:projeto/</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Na segunda vez, o rsync copia:</p>
+<label><input type="radio" name="q3"> tudo de novo</label>
+<label><input type="radio" name="q3"> só o que mudou</label>
+<label><input type="radio" name="q3"> nada, nunca</label>
+<label><input type="radio" name="q3"> só as pastas</label></div><div class="mc" data-answer="2"><p class="mc-q">4. <code>rsync -a projeto/ srv:destino/</code> copia:</p>
+<label><input type="radio" name="q4"> a pasta projeto para dentro de destino</label>
+<label><input type="radio" name="q4"> o conteúdo de projeto para dentro de destino</label>
+<label><input type="radio" name="q4"> só os arquivos .txt</label>
+<label><input type="radio" name="q4"> nada</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^rsync -a;;out:sending incremental file list">
+<p class="try-task"><strong>Missão:</strong> sincronize a pasta <code>projeto</code> com o servidor, mostrando o que foi copiado.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+rsync -av projeto/ lab@servidor:projeto/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+sending incremental file list
+created directory projeto
+./
+README.md
+estilo.css
+index.html
+img/
+img/logo.png
+
+sent 2.479 bytes  received 137 bytes  1.744,00 bytes/sec
+total size is 2.118  speedup is 0,81
+</pre>
+</div><div class="trycmd" data-goal="src:--dry-run|-n\b;;src:--delete;;out:(DRY RUN)">
+<p class="try-task"><strong>Missão:</strong> ensaie um espelhamento com <code>--delete</code>, sem mudar nada.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+rsync -av --dry-run --delete projeto/ lab@servidor:projeto/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+sending incremental file list
+created directory projeto
+./
+README.md
+estilo.css
+index.html
+img/
+img/logo.png
+
+sent 201 bytes  received 72 bytes  546,00 bytes/sec
+total size is 2.118  speedup is 7,76 (DRY RUN)
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Só o que mudou vai pela rede.</li>
+<li>Ensaie o <code>--delete</code>.</li>
+<li><code>orig/</code> copia o conteúdo; <code>orig</code>, a pasta.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

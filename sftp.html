@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sftp: navegando e transferindo arquivos pelo SSH | Guia SSH</title>
+<meta name="description" content="Usar o sftp: ls, cd, get, put, lls e lcd numa sessão, e o modo lote com sftp -b para scripts.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Sessão de arquivos: <span class="hl">sftp</span></h1>
+
+<p class="intro">O sftp é uma sessão só para arquivos, com comandos para os dois lados. Também roda em lote, em scripts.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Navegar e transferir com <code>get</code> e <code>put</code>.</li>
+<li>Usar os comandos locais (<code>lls</code>, <code>lcd</code>).</li>
+<li>Rodar em lote com <code>-b</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: um “explorador de arquivos” no terminal</h2>
+<p>O <code>sftp</code> abre uma sessão só para arquivos: você navega no servidor com <code>ls</code> e <code>cd</code> e transfere com <code>get</code> (baixar) e <code>put</code> (enviar). Os comandos com <code>l</code> na frente (<code>lls</code>, <code>lcd</code>, <code>lpwd</code>) valem para o lado local, o notebook. Programas gráficos como o FileZilla usam o mesmo protocolo.</p>
+<hr>
+<h2>1. Uma sessão</h2>
+<pre class="term" data-cwd="~">$ sftp lab@servidor
+Connected to servidor.
+sftp&gt; pwd
+Remote working directory: /home/lab   « pwd: a pasta no servidor
+sftp&gt; ls
+relatorio.txt   site            
+sftp&gt; get relatorio.txt
+Fetching /home/lab/relatorio.txt to relatorio.txt   « get: baixando
+relatorio.txt                                                     100%   47    88.5KB/s   00:00    
+sftp&gt; put notas.txt
+Uploading notas.txt to /home/lab/notas.txt   « put: enviando
+notas.txt                                                         100%   53    42.3KB/s   00:00    
+sftp&gt; ls -l
+-rw-r--r--    ? lab      lab            53 Nov 21 12:02 notas.txt
+-rw-r--r--    ? lab      lab            47 Nov 21 12:00 relatorio.txt
+drwxr-xr-x    ? lab      lab          4096 Nov 21 12:00 site
+sftp&gt; lls
+notas.txt  projeto  relatorio.txt  site
+sftp&gt; bye
+$</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>No servidor</th><th>No notebook</th><th>Transferir</th></tr>
+<tr><td><code>ls</code>, <code>cd</code>, <code>pwd</code>, <code>mkdir</code>, <code>rm</code></td><td><code>lls</code>, <code>lcd</code>, <code>lpwd</code>, <code>lmkdir</code></td><td><code>get arq</code>, <code>put arq</code>, <code>get -r pasta</code>, <code>put -r pasta</code></td></tr>
+</table></div>
+<hr>
+<h2>2. Em lote: <code>sftp -b</code></h2>
+<p>Num script, ponha os comandos num arquivo e rode com <code>-b</code>. O sftp mostra cada comando com <code>sftp&gt;</code> na frente:</p>
+<pre class="term" data-cwd="~">$ printf 'cd site\nls\nget index.html\n' &gt; lote.sftp
+$ sftp -b lote.sftp lab@servidor
+sftp&gt; cd site
+sftp&gt; ls
+index.html  
+sftp&gt; get index.html
+$ cat index.html
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Arquivo que não existe, em lote</strong>
+<p>Em modo lote, o primeiro erro <strong>para tudo</strong> (o que vem depois não roda). Útil em scripts: nada acontece pela metade sem você saber.</p>
+<pre class="term" data-cwd="~">$ printf 'get naoexiste.txt\nget relatorio.txt\n' &gt; lote.sftp
+$ sftp -b lote.sftp lab@servidor
+sftp&gt; get naoexiste.txt
+File &quot;/home/lab/naoexiste.txt&quot; not found.
+$ ls
+lote.sftp  notas.txt  projeto  site
+$</pre>
+<p>Para seguir mesmo com erro, ponha um <code>-</code> na frente do comando no arquivo: <code>-get naoexiste.txt</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>sftp lab@srv</code></td><td>abre a sessão.</td></tr>
+<tr><td><code>get / put</code></td><td>baixa / envia.</td></tr>
+<tr><td><code>lls / lcd</code></td><td>lado local.</td></tr>
+<tr><td><code>sftp -b lote lab@srv</code></td><td>em lote.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Baixar</h3><p>Que comando do sftp baixa um arquivo?</p><div class="ex-code">sftp&gt; <input data-answer="get" aria-label="comando"> relatorio.txt</div></div><div class="exercise"><h3>2. Enviar</h3><p>Que comando do sftp envia um arquivo?</p><div class="ex-code">sftp&gt; <input data-answer="put" aria-label="comando"> notas.txt</div></div><div class="mc" data-answer="2"><p class="mc-q">3. No sftp, <code>lls</code> lista:</p>
+<label><input type="radio" name="q3"> o servidor</label>
+<label><input type="radio" name="q3"> o notebook (local)</label>
+<label><input type="radio" name="q3"> as chaves</label>
+<label><input type="radio" name="q3"> os logs</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Em <code>sftp -b</code>, um comando que falha:</p>
+<label><input type="radio" name="q4"> é ignorado</label>
+<label><input type="radio" name="q4"> para o lote</label>
+<label><input type="radio" name="q4"> repete</label>
+<label><input type="radio" name="q4"> apaga o arquivo</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:\|\s*sftp\b;;outre:^Remote working directory: /\S+$">
+<p class="try-task"><strong>Missão:</strong> mostre a pasta de trabalho do servidor com o sftp, sem abrir sessão (mande o comando pelo cano).</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+echo pwd | sftp -q lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+sftp&gt; pwd
+Remote working directory: /home/lab
+</pre>
+</div><div class="trycmd" data-goal="src:sftp -b;;outre:^sftp&gt; get relatorio\.txt$">
+<p class="try-task"><strong>Missão:</strong> crie um lote que baixa o <code>relatorio.txt</code> e rode com <code>sftp -b</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+printf 'get relatorio.txt\n' &gt; lote.sftp &amp;&amp; sftp -b lote.sftp lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+sftp&gt; get relatorio.txt
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>get</code> baixa, <code>put</code> envia.</li>
+<li>Com <code>l</code> na frente, é o notebook.</li>
+<li>Em lote, o primeiro erro para tudo.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

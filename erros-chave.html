@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permission denied (publickey) e UNPROTECTED PRIVATE KEY FILE no SSH | Guia SSH</title>
+<meta name="description" content="Resolver os erros de chave do SSH: Permission denied (publickey) e UNPROTECTED PRIVATE KEY FILE, com ssh -v e chmod 600.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Erros de <span class="hl">chave</span></h1>
+
+<p class="intro">Os dois erros de chave mais comuns, com a causa e o conserto.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Entender <code>Permission denied (publickey)</code>.</li>
+<li>Consertar <code>UNPROTECTED PRIVATE KEY FILE</code>.</li>
+<li>Conferir o usuário.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Os dois erros de chave mais comuns</h2>
+<p>Esta aula junta os erros de autenticação que você mais vai ver, o que cada um quer dizer e como resolver.</p>
+<hr>
+<h2>1. Permission denied (publickey)</h2>
+<p>O servidor só aceita chave (senha desligada) e nenhuma das chaves que o notebook ofereceu está no <code>authorized_keys</code> dele:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+lab@servidor: Permission denied (publickey).   « só chave, e nenhuma serviu
+$ ssh -v lab@servidor true 2&gt;&amp;1 | grep -E 'Offering|Permission denied'
+debug1: Offering public key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU
+lab@servidor: Permission denied (publickey).
+$</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>No ssh -v</th><th>Causa provável</th></tr>
+<tr><td><code>Ofereceu a chave e não foi aceita</code></td><td>falta a chave pública no <code>~/.ssh/authorized_keys</code> do servidor, ou o usuário está errado.</td></tr>
+<tr><td><code>Não ofereceu chave nenhuma</code></td><td>o nome do arquivo não é o padrão: use <code>-i</code> ou <code>IdentityFile</code>.</td></tr>
+<tr><td><code>O log do servidor fala em &lt;code&gt;bad ownership&lt;/code&gt;</code></td><td>permissões da pasta do usuário no servidor (aula de <a href="permissoes.html">permissões</a>).</td></tr>
+</table></div>
+<p>Com a senha desligada, o <code>ssh-copy-id</code> não funciona mais: a chave nova entra por outro caminho que já tem acesso (outra chave, o console do provedor, um colega).</p>
+<hr>
+<h2>2. UNPROTECTED PRIVATE KEY FILE</h2>
+<p>A chave privada ficou legível por outros usuários (aqui, <code>644</code>). O ssh se recusa a usá-la:</p>
+<pre class="term" data-cwd="~">$ ls -l ~/.ssh/id_ed25519
+-rw-r--r-- 1 ana ana 399 nov 21 12:03 /home/ana/.ssh/id_ed25519   « todo mundo lê: ruim
+$ ssh -o BatchMode=yes lab@servidor hostname
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @   « o aviso
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0644 for '/home/ana/.ssh/id_ed25519' are too open.
+It is required that your private key files are NOT accessible by others.
+This private key will be ignored.
+Load key &quot;/home/ana/.ssh/id_ed25519&quot;: bad permissions   « a chave foi ignorada
+lab@servidor: Permission denied (publickey,password).
+$ chmod 600 ~/.ssh/id_ed25519
+$ ssh lab@servidor hostname
+servidor
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Usuário errado</strong>
+<p>A chave está certa, mas no usuário errado do servidor. A ana não tem conta lá com essa chave:</p>
+<pre class="term" data-cwd="~">$ ssh -o BatchMode=yes ana@servidor hostname
+ana@servidor: Permission denied (publickey,password).
+$</pre>
+<p>Confira o usuário antes do <code>@</code> (ou o <code>User</code> no config). Sem usuário, o ssh usa o seu nome do notebook.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>Permission denied (publickey)</code></td><td>nenhuma chave serviu.</td></tr>
+<tr><td><code>UNPROTECTED PRIVATE KEY FILE</code></td><td><code>chmod 600</code> na chave.</td></tr>
+<tr><td><code>-o BatchMode=yes</code></td><td>não pergunta senha.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Arrumando a chave</h3><p>Complete para deixar a chave privada só para você:</p><div class="ex-code">chmod <input data-answer="600" aria-label="resposta"> ~/.ssh/id_ed25519</div></div><div class="exercise"><h3>2. Sem perguntas</h3><p>Que opção faz o ssh desistir em vez de pedir senha?</p><div class="ex-code">ssh -o <input data-answer="BatchMode=yes" aria-label="opção"> lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. <code>Permission denied (publickey)</code> quer dizer:</p>
+<label><input type="radio" name="q3"> o servidor está desligado</label>
+<label><input type="radio" name="q3"> o servidor só aceita chave e nenhuma serviu</label>
+<label><input type="radio" name="q3"> a rede caiu</label>
+<label><input type="radio" name="q3"> a chave do servidor mudou</label></div><div class="mc" data-answer="1"><p class="mc-q">4. <code>UNPROTECTED PRIVATE KEY FILE</code> se resolve com:</p>
+<label><input type="radio" name="q4"> <code>chmod 600</code> na chave privada</label>
+<label><input type="radio" name="q4"> <code>ssh-keygen -R</code></label>
+<label><input type="radio" name="q4"> apagando o known_hosts</label>
+<label><input type="radio" name="q4"> reiniciando o servidor</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:chmod 600;;outre:^servidor$">
+<p class="try-task"><strong>Missão:</strong> a sua chave privada ficou com permissões abertas. Arrume e conecte.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+chmod 600 ~/.ssh/id_ed25519 &amp;&amp; ssh lab@servidor hostname
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+servidor
+</pre>
+</div><div class="trycmd" data-goal="src:BatchMode=yes;;out:Permission denied">
+<p class="try-task"><strong>Missão:</strong> com uma chave que o servidor não conhece, tente entrar sem perguntar senha.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o BatchMode=yes lab@servidor hostname
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+lab@servidor: Permission denied (publickey,password).
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Veja com <code>-v</code> que chave foi oferecida.</li>
+<li>Chave privada: <code>600</code>.</li>
+<li>Confira o usuário.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+"""A capa (index.html) do Guia SSH."""
+from lib_guia import *
+import lib_guia
+
+def gerar(niveis, modo):
+    prova = T("index-prova", "ssh servidor hostname", "rsync -a projeto/ servidor:backup/ && ssh servidor ls backup", "ssh interno 'hostname; curl -s http://localhost/'",
+              estado="config", notas={"servidor": "entrou sem senha, pelo apelido do config", "index.html": "a pasta foi parar no servidor", "Wiki interna": "uma máquina que só o servidor enxerga"})
+    if modo != "paginas":
+        return
+    n_aulas = sum(len(g["aulas"]) for n in niveis for g in n["grupos"])
+    corpo = f"""<div class="hero">
+<h1>Tutorial SSH no terminal</h1>
+<p>Aprenda a <strong>entrar, copiar arquivos e abrir túneis em outros computadores com o SSH</strong>, do zero, como numa escola: <code>ssh</code>, chaves, <code>~/.ssh/config</code>, <code>scp</code>, <code>rsync</code>, túneis e o servidor <code>sshd</code>, um assunto por aula, com a saída de verdade de cada comando. Este guia complementa o <a href="https://wallysondevs.github.io/guia-bash/">Guia Bash</a>: lá você aprende a usar o terminal; aqui, a usar o terminal de outro computador.</p>
+<a class="btn btn-lg" href="introducao.html">Comece aqui &#10095;</a>
+</div>
+
+<div class="pager"></div>
+
+<p>A primeira aula é <a href="introducao.html">O que é SSH</a>. Depois vem o laboratório (o notebook e o servidor de teste) e, uma a uma, as aulas.</p>
+
+<hr>
+
+<h2>Uma provinha</h2>
+<p>Três linhas: entrar no servidor sem senha, mandar uma pasta inteira para lá e chegar a uma máquina interna que só o servidor enxerga, passando por ele. Tudo isso foi rodado de verdade, no laboratório do guia:</p>
+{prova}
+<p>Parece mágica? No fim do guia, você vai montar isso sozinho, e saber o que fazer quando der errado.</p>
+
+<hr>
+
+<h2>O que é este guia</h2>
+<p>SSH é o jeito padrão de usar um computador pela rede: um servidor na nuvem, o Raspberry Pi da estante, o computador do trabalho. O guia ensina:</p>
+<ul>
+<li><strong>a conexão</strong>: <code>ssh</code>, a pergunta do fingerprint, o <code>known_hosts</code> e os comandos remotos;</li>
+<li><strong>as chaves</strong>: <code>ssh-keygen</code>, <code>ssh-copy-id</code>, frase secreta, <code>ssh-agent</code> e permissões;</li>
+<li><strong>o dia a dia</strong>: <code>~/.ssh/config</code>, <code>scp</code>, <code>sftp</code> e <code>rsync</code>;</li>
+<li><strong>os túneis</strong>: <code>-L</code>, <code>-R</code>, <code>-D</code> e <code>ProxyJump</code>;</li>
+<li><strong>o servidor</strong>: <code>sshd_config</code>, desligar a senha e o root, logs, <code>fail2ban</code> e a depuração com <code>-v</code>.</li>
+</ul>
+<p>São {n_aulas} aulas em cinco níveis, do primeiro <code>ssh</code> aos projetos completos (acesso seguro, backup e túnel até uma máquina interna). Cada aula ensina <strong>um assunto só</strong>. Os exemplos usam a usuária fictícia <code>ana</code>, no computador <code>notebook</code> (192.168.0.10), e o usuário <code>lab</code> no <code>servidor</code> (192.168.0.20). As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+<p>O texto está em português do Brasil. As mensagens <strong>não são traduzidas por nós</strong>: aparecem exatamente como os programas mostraram num Linux em português. O OpenSSH só fala inglês, e as aulas explicam cada mensagem dele.</p>
+
+<hr>
+
+<h2>Como estudar</h2>
+<ol class="passo">
+  <li><strong>Monte o laboratório.</strong> A aula <a href="preparando.html">O laboratório</a> mostra como ter um servidor de teste: outra máquina da sua rede, uma máquina virtual ou o próprio computador.</li>
+  <li><strong>Leia com calma.</strong> A ideia, o comando e a saída. Não pule a parte “Quando dá errado”.</li>
+  <li><strong>Rode no seu terminal.</strong> Este guia não simula o terminal: copie o comando, rode no seu Linux (ou no WSL do Windows, ou no macOS) e compare com a saída da aula. Troque <code>servidor</code> e <code>lab</code> pelo seu servidor e o seu usuário.</li>
+  <li><strong>Faça as missões e os exercícios.</strong> Nas caixas <strong>Missão</strong>, cole o que o terminal respondeu e clique em <strong>Conferir</strong>.</li>
+</ol>
+
+<div class="tip">
+<strong>A regra de ouro</strong>
+<p>Treine num servidor de teste, nunca no servidor de produção. Antes de mexer no <code>sshd</code> de uma máquina remota, deixe uma sessão aberta. <a href="introducao.html">Comece aqui</a>.</p>
+</div>
+
+<hr>
+
+<h2>Versões de referência</h2>
+<p>Todas as saídas foram colhidas com o <strong>{lib_guia.OPENSSH} no Linux</strong> (<code>OpenSSH_10.0p2 Debian-7+deb13u4</code>, OpenSSL 3.5), num Debian 13 em <code>pt_BR.UTF-8</code>, com GNU Bash 5.2, rsync 3.5 e fail2ban 1.1. Em outras versões, algumas mensagens podem mudar um pouco.</p>
+
+<hr>
+
+<h2>Escolha sua trilha</h2>
+<p>O guia tem cinco níveis, pensados para serem feitos em ordem. O mapa abaixo é montado a partir da lista oficial de aulas, o <code>NIVEIS</code>.</p>
+<div id="mapa-niveis" class="trilhas"></div>
+"""
+    html = lib_guia.HEAD.format(title="Tutorial SSH do zero: chaves, config, scp, rsync e túneis | Guia SSH",
+                                desc="Aprenda SSH do zero, em português, com saídas reais do OpenSSH: chaves, ~/.ssh/config, scp, sftp, rsync, túneis, ProxyJump, sshd e fail2ban. Complementa o Guia Bash.")
+    html += corpo + lib_guia.FOOT
+    (lib_guia.ROOT / "index.html").write_text(html, encoding="utf-8")

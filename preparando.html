@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Montando o laboratório de SSH: notebook e servidor | Guia SSH</title>
+<meta name="description" content="Como montar um laboratório de SSH em casa: instalar o openssh-server, criar o usuário lab, dar nome ao servidor no /etc/hosts e criar os arquivos de exemplo.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O <span class="hl">laboratório</span>: notebook e servidor</h1>
+
+<p class="intro">Para praticar você precisa de um cliente e de um servidor. Pode ser dois computadores, uma máquina virtual ou um computador só.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Instalar o servidor SSH e criar o usuário de teste.</li>
+<li>Dar um nome ao servidor no <code>/etc/hosts</code>.</li>
+<li>Conferir a rede com <code>getent</code> e <code>ping</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: um laboratório só seu</h2>
+<p>Para aprender SSH você precisa de <strong>dois computadores</strong>: um cliente e um servidor. Não precisa comprar nada nem alugar servidor na internet. Qualquer uma destas opções serve:</p>
+<ul>
+<li><strong>Dois computadores em casa</strong> (um notebook e um PC velho, um Raspberry Pi…), na mesma rede.</li>
+<li><strong>Uma máquina virtual</strong> (VirtualBox, GNOME Boxes) com Debian ou Ubuntu, fazendo o papel de servidor.</li>
+<li><strong>Um computador só</strong>: o servidor SSH roda no próprio Linux, e você se conecta em <code>localhost</code>. Tudo funciona igual, só que os dois lados são a mesma máquina.</li>
+</ul>
+<p>Os exemplos do guia usam três computadores fictícios, todos numa rede de teste:</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Computador</th><th>IP</th><th>Usuário</th><th>Papel</th></tr>
+<tr><td><code>notebook</code></td><td>192.168.0.10</td><td><code>ana</code></td><td>o cliente: de onde a Ana se conecta</td></tr>
+<tr><td><code>servidor</code></td><td>192.168.0.20</td><td><code>lab</code></td><td>o servidor SSH principal</td></tr>
+<tr><td><code>interno</code></td><td>192.168.0.130</td><td><code>lab</code></td><td>uma máquina que só o servidor alcança (aparece no Nível 4)</td></tr>
+</table></div>
+<hr>
+<h2>1. No servidor: instalar o sshd e criar o usuário lab</h2>
+<p>No computador que vai ser o servidor (Debian ou Ubuntu), instale o servidor SSH e crie o usuário de teste <code>lab</code>, com uma senha que você vai lembrar e permissão de usar <code>sudo</code>:</p>
+<pre class="cmd">
+sudo apt install openssh-server
+sudo adduser lab
+sudo adduser lab sudo
+</pre>
+<p>Depois, entre como <code>lab</code> (<code>sudo -iu lab</code>) e crie os arquivos de exemplo com o script <a href="arquivos/preparar-servidor.sh"><code>preparar-servidor.sh</code></a>: <code>bash preparar-servidor.sh</code>. Ele cria o <code>relatorio.txt</code> e uma página em <code>site/</code>.</p>
+<p>Descubra o IP do servidor com <code>ip -br addr</code>. No laboratório, o servidor tem duas placas de rede, uma para cada rede de teste:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ hostname
+servidor
+$ ip -br addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+sv0@if2          UP             192.168.0.20/25    « o IP que o notebook usa
+sv1@if2          UP             192.168.0.129/25 
+$</pre>
+<hr>
+<h2>2. No notebook: dar um nome ao servidor</h2>
+<p>Para escrever <code>servidor</code> em vez do IP, acrescente uma linha ao <code>/etc/hosts</code> do notebook, <strong>com o IP do seu servidor</strong> (se for o mesmo computador, use <code>127.0.0.1</code>):</p>
+<pre class="cmd">
+echo "192.168.0.20 servidor" | sudo tee -a /etc/hosts
+</pre>
+<p>E crie os arquivos de exemplo do lado do cliente com o <a href="arquivos/preparar-notebook.sh"><code>preparar-notebook.sh</code></a>: <code>bash preparar-notebook.sh</code>, na sua pasta pessoal. No laboratório, o notebook ficou assim:</p>
+<pre class="term" data-cwd="~">$ hostname
+notebook
+$ getent hosts servidor
+192.168.0.20    servidor
+$ ping -c 2 servidor
+PING servidor (192.168.0.20) 56(84) bytes of data.
+64 bytes from servidor (192.168.0.20): icmp_seq=1 ttl=127 time=1.96 ms
+64 bytes from servidor (192.168.0.20): icmp_seq=2 ttl=127 time=0.049 ms
+
+--- servidor ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.049/1.006/1.964/0.957 ms
+$ ls
+notas.txt  projeto  site
+$</pre>
+<dl class="anatomy"><dt>getent hosts servidor</dt><dd>mostra que IP o nome <code>servidor</code> tem para este computador.</dd><dt>ping -c 2</dt><dd>manda dois “pings”: se voltarem, a rede até o servidor funciona.</dd></dl>
+<div class="tip"><strong>O cliente já vem instalado</strong><p>O <code>ssh</code> (pacote <code>openssh-client</code>) vem em quase todo Linux, no macOS e no Windows 10/11. Só o servidor precisa do <code>openssh-server</code>.</p></div>
+<hr>
+<h2>3. O resto do laboratório</h2>
+<p>Algumas aulas de túneis usam duas páginas de teste. Quando chegar lá, deixe-as rodando num terminal à parte:</p>
+<pre class="cmd">
+cd ~/site && python3 -m http.server -b 127.0.0.1 8080     # no servidor, como lab
+cd ~/site && python3 -m http.server -b 127.0.0.1 3000     # no notebook, como você
+</pre>
+<p>A máquina <code>interno</code> é opcional. Sem ela, as aulas mostram como fazer o mesmo com o próprio servidor.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>O servidor SSH não está rodando</strong>
+<p>Se o <code>openssh-server</code> não estiver instalado, ou o serviço estiver parado, a conexão é recusada na hora. Na coleta, paramos o sshd de propósito:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+ssh: connect to host servidor port 22: Connection refused
+$</pre>
+<p>“Connection refused”: o computador existe e respondeu, mas ninguém atende na porta 22. No servidor, confira com <code>sudo systemctl status ssh</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>sudo apt install openssh-server</code></td><td>instala o servidor.</td></tr>
+<tr><td><code>sudo adduser lab</code></td><td>cria o usuário de teste.</td></tr>
+<tr><td><code>ip -br addr</code></td><td>mostra os IPs.</td></tr>
+<tr><td><code>getent hosts servidor</code></td><td>que IP tem o nome.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O pacote do servidor</h3><p>Complete o comando que instala o servidor SSH:</p><div class="ex-code">sudo apt install <input data-answer="openssh-server" aria-label="resposta"></div></div><div class="exercise"><h3>2. Usuário de teste</h3><p>Complete para criar o usuário <code>lab</code> no servidor:</p><div class="ex-code">sudo adduser <input data-answer="lab" aria-label="resposta"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Em que arquivo do notebook se dá um nome a um IP?</p>
+<label><input type="radio" name="q3"> <code>~/.bashrc</code></label>
+<label><input type="radio" name="q3"> <code>/etc/hosts</code></label>
+<label><input type="radio" name="q3"> <code>/etc/ssh/sshd_config</code></label>
+<label><input type="radio" name="q3"> <code>~/notas.txt</code></label></div><div class="mc" data-answer="2"><p class="mc-q">4. Dá para aprender SSH com um computador só?</p>
+<label><input type="radio" name="q4"> Não, precisa de dois</label>
+<label><input type="radio" name="q4"> Sim, conectando em <code>localhost</code></label>
+<label><input type="radio" name="q4"> Só no Windows</label>
+<label><input type="radio" name="q4"> Só com internet</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:\bgetent hosts\b;;outre:^\d+\.\d+\.\d+\.\d+\s+servidor$">
+<p class="try-task"><strong>Missão:</strong> veja que IP o nome <code>servidor</code> tem no seu notebook.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+getent hosts servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+192.168.0.20    servidor
+</pre>
+</div><div class="trycmd" data-goal="src:\bps\b;;src:sshd;;outre:^sshd: \S+ \[listener\]">
+<p class="try-task"><strong>Missão:</strong> no servidor, mostre o processo do <code>sshd</code> que espera conexões. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ps -C sshd -o cmd
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+CMD
+sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O servidor precisa do <code>openssh-server</code>; o cliente já vem instalado.</li>
+<li>Dê um nome ao IP no <code>/etc/hosts</code>.</li>
+<li>“Connection refused”: ninguém atende na porta 22.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

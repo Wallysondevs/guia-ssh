@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>~/.ssh/config: apelidos com Host, HostName, User e Port | Guia SSH</title>
+<meta name="description" content="Criar apelidos de servidores no ~/.ssh/config com Host, HostName, User, Port e IdentityFile, e conferir com ssh -G.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Apelidos no <span class="hl">~/.ssh/config</span></h1>
+
+<p class="intro">O config guarda o usuário, a porta e a chave de cada servidor com um apelido curto.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Escrever um bloco <code>Host</code>.</li>
+<li>Conferir a configuração com <code>ssh -G</code>.</li>
+<li>Usar o apelido no scp e no rsync.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: apelidos para os seus servidores</h2>
+<p>Digitar <code>ssh -i ~/.ssh/chave -p 2222 lab@192.168.0.20</code> toda vez cansa e dá erro. O arquivo <code>~/.ssh/config</code> guarda essas opções com um <strong>apelido</strong>: depois, basta <code>ssh srv</code>. Vale também para <code>scp</code>, <code>sftp</code> e <code>rsync</code>.</p>
+<pre class="cmd">
+Host srv
+    HostName 192.168.0.20
+    User lab
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+</pre>
+<ul>
+<li><code>Host srv</code>: o apelido. As linhas recuadas abaixo valem para ele.</li>
+<li><code>HostName</code>: o endereço de verdade (nome ou IP).</li>
+<li><code>User</code>, <code>Port</code>, <code>IdentityFile</code>: o usuário, a porta e a chave, como <code>lab@</code>, <code>-p</code> e <code>-i</code>.</li>
+</ul>
+<hr>
+<h2>1. Criar o arquivo</h2>
+<p>Você pode editar com <code>nano ~/.ssh/config</code>. Na coleta, a Ana criou o bloco com <code>printf</code> e deixou o arquivo com permissão <code>600</code>:</p>
+<pre class="term" data-cwd="~">$ printf 'Host srv\n    HostName 192.168.0.20\n    User lab\n' &gt;&gt; ~/.ssh/config
+$ chmod 600 ~/.ssh/config
+$ cat ~/.ssh/config
+Host srv
+    HostName 192.168.0.20
+    User lab
+$ ssh srv hostname
+servidor
+$</pre>
+<hr>
+<h2>2. Ver o que o ssh vai usar: <code>ssh -G</code></h2>
+<p>O <code>-G</code> não conecta: mostra a configuração final que o ssh usaria para aquele apelido. É o melhor jeito de conferir o arquivo:</p>
+<pre class="term" data-cwd="~">$ ssh -G srv | grep -E '^(hostname|user|port|identityfile) '
+user lab   « veio do User
+hostname 192.168.0.20   « veio do HostName
+port 22   « o padrão, já que não foi dito
+identityfile ~/.ssh/id_rsa
+identityfile ~/.ssh/id_ecdsa
+identityfile ~/.ssh/id_ecdsa_sk
+identityfile ~/.ssh/id_ed25519
+identityfile ~/.ssh/id_ed25519_sk
+identityfile ~/.ssh/id_xmss
+$</pre>
+<hr>
+<h2>3. O apelido vale para tudo</h2>
+<pre class="term" data-cwd="~">$ scp notas.txt srv:
+notas.txt                                                         100%   53   135.4KB/s   00:00    
+$ ssh srv ls
+notas.txt
+relatorio.txt
+site
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Opção com erro de digitação</strong>
+<p>Uma opção escrita errado (aqui, <code>HostNme</code>) faz o ssh parar, avisando a linha:</p>
+<pre class="term" data-cwd="~">$ printf 'Host srv\n    HostNme 192.168.0.20\n' &gt; ~/.ssh/config
+$ ssh srv hostname
+/home/ana/.ssh/config: line 2: Bad configuration option: hostnme
+/home/ana/.ssh/config: terminating, 1 bad configuration options
+$</pre>
+<p>Corrija a linha indicada. O <code>ssh -G apelido</code> acusa o mesmo erro sem tentar conectar.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>Host apelido</code></td><td>abre um bloco.</td></tr>
+<tr><td><code>HostName / User / Port</code></td><td>endereço, usuário, porta.</td></tr>
+<tr><td><code>IdentityFile ~/.ssh/chave</code></td><td>a chave.</td></tr>
+<tr><td><code>ssh -G apelido</code></td><td>mostra o resultado.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O apelido</h3><p>Que palavra abre um bloco no ~/.ssh/config?</p><div class="ex-code"><input data-answer="Host" aria-label="palavra"> srv</div></div><div class="exercise"><h3>2. O endereço</h3><p>Que opção diz o endereço de verdade?</p><div class="ex-code">    <input data-answer="HostName" aria-label="opção"> 192.168.0.20</div></div><div class="mc" data-answer="2"><p class="mc-q">3. <code>ssh -G srv</code>:</p>
+<label><input type="radio" name="q3"> conecta no srv</label>
+<label><input type="radio" name="q3"> mostra a configuração final, sem conectar</label>
+<label><input type="radio" name="q3"> apaga o apelido</label>
+<label><input type="radio" name="q3"> gera uma chave</label></div><div class="mc" data-answer="2"><p class="mc-q">4. O apelido do config funciona com:</p>
+<label><input type="radio" name="q4"> só o ssh</label>
+<label><input type="radio" name="q4"> ssh, scp, sftp e rsync</label>
+<label><input type="radio" name="q4"> só o scp</label>
+<label><input type="radio" name="q4"> só no servidor</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh -G;;outre:^user \S+$">
+<p class="try-task"><strong>Missão:</strong> mostre que usuário o ssh vai usar para o apelido <code>servidor</code> do seu config.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -G servidor | grep '^user '
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+user lab
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh servidor\b;;outre:^alias funcionando$">
+<p class="try-task"><strong>Missão:</strong> rode um comando no servidor usando só o apelido.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh servidor 'echo alias funcionando'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+alias funcionando
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Um bloco <code>Host</code> por servidor.</li>
+<li><code>ssh -G</code> confere sem conectar.</li>
+<li>O apelido vale para scp, sftp e rsync.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

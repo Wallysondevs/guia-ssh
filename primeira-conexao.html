@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A primeira conexão SSH: fingerprint, yes e senha | Guia SSH</title>
+<meta name="description" content="A primeira conexão com ssh: a pergunta do fingerprint, o yes, a senha que não aparece, o prompt do servidor e o exit.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>A primeira <span class="hl">conexão</span></h1>
+
+<p class="intro">Na primeira vez, o ssh pergunta se você confia no servidor. Esta aula mostra a conversa inteira, de verdade.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Entender a pergunta “authenticity of host”.</li>
+<li>Entrar com senha e sair com <code>exit</code>.</li>
+<li>Por que dizer o usuário no <code>usuario@</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: entrar no servidor</h2>
+<p>Sem comando no fim, o <code>ssh</code> abre uma <strong>sessão</strong>: o prompt muda para o do servidor, e tudo o que você digita roda lá, até sair com <code>exit</code>.</p>
+<hr>
+<h2>1. A primeira vez: a pergunta do “fingerprint”</h2>
+<p>Na primeira conexão com um servidor, o ssh ainda não conhece a <strong>chave do servidor</strong> (a “identidade” dele) e pergunta se você confia. Foi assim no notebook da Ana, que ainda nunca tinha se conectado:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+The authenticity of host 'servidor (192.168.0.20)' can't be established.
+ED25519 key fingerprint is SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE.   « a impressão digital da chave do servidor
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes   « a Ana digitou yes
+Warning: Permanently added 'servidor' (ED25519) to the list of known hosts.   « guardado em ~/.ssh/known_hosts
+lab@servidor's password:    « a senha não aparece enquanto você digita
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ hostname   « agora o prompt é do servidor
+servidor
+lab@servidor:~$ whoami
+lab
+lab@servidor:~$ exit
+sair
+Connection to servidor closed.   « de volta ao notebook
+$</pre>
+<p>Passo a passo:</p>
+<ol class="passo">
+<li><strong>“The authenticity of host … can't be established”</strong>: o ssh nunca viu este servidor. Ele mostra a <strong>impressão digital</strong> (<em>fingerprint</em>) da chave dele, um resumo como <code>SHA256:…</code>.</li>
+<li>Você responde <code>yes</code> (por extenso). O ssh guarda a chave em <code>~/.ssh/known_hosts</code> e não pergunta de novo.</li>
+<li>Vem a <strong>senha</strong> do usuário <code>lab</code> no servidor. Nada aparece enquanto você digita: nem bolinhas. É normal.</li>
+<li>Pronto: o prompt agora é <code>lab@servidor</code>. O <code>exit</code> fecha a sessão (o Bash do servidor, em português, responde “sair”).</li>
+</ol>
+<div class="warning"><strong>Confira a impressão digital</strong><p>O certo é comparar o fingerprint com o do servidor antes de digitar <code>yes</code>. A aula <a href="known-hosts.html">known_hosts</a> mostra como ver o fingerprint no próprio servidor.</p></div>
+<hr>
+<h2>2. Da segunda vez em diante</h2>
+<p>Com a chave do servidor guardada, o ssh vai direto para a senha:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+lab@servidor's password: 
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ exit
+sair
+Connection to servidor closed.
+$</pre>
+<hr>
+<h2>3. E se eu não disser o usuário?</h2>
+<p>Sem o <code>usuario@</code>, o ssh usa o <strong>seu nome no notebook</strong>. Aqui, a Ana digitou só <code>ssh servidor</code>: o ssh pediu a senha de <code>ana</code>, uma conta que não é dela no servidor, e as tentativas falharam:</p>
+<pre class="term" data-cwd="~">$ ssh -o NumberOfPasswordPrompts=2 servidor
+ana@servidor's password:    « o ssh supôs o usuário ana
+Permission denied, please try again.
+ana@servidor's password: 
+ana@servidor: Permission denied (publickey,password).
+$</pre>
+<p>O <code>-o NumberOfPasswordPrompts=2</code> só encurtou a demonstração (o normal são 3 tentativas). A solução é dizer o usuário certo: <code>ssh lab@servidor</code>. A aula <a href="ssh-config.html">~/.ssh/config</a> mostra como não precisar repetir isso.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Responder “no” à pergunta</strong>
+<p>Se você responder <code>no</code> (ou só apertar Enter), o ssh desiste, e nada é guardado:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+The authenticity of host 'servidor (192.168.0.20)' can't be established.
+ED25519 key fingerprint is SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? no
+Host key verification failed.
+$</pre>
+<p>“Host key verification failed.” aqui só quer dizer “você não confirmou”. Rode de novo e responda <code>yes</code> por extenso.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh lab@servidor</code></td><td>entra no servidor.</td></tr>
+<tr><td><code>yes</code></td><td>aceita a chave do servidor.</td></tr>
+<tr><td><code>exit</code></td><td>sai da sessão.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. A resposta</h3><p>O que digitar na pergunta da primeira conexão para aceitar?</p><div class="ex-code"><input data-answer="yes" aria-label="resposta"></div></div><div class="exercise"><h3>2. Sair</h3><p>Que comando fecha a sessão no servidor?</p><div class="ex-code"><input data-answer="exit|logout" aria-label="resposta"></div></div><div class="mc" data-answer="1"><p class="mc-q">3. Onde o ssh guarda a chave dos servidores que você aceitou?</p>
+<label><input type="radio" name="q3"> <code>~/.ssh/known_hosts</code></label>
+<label><input type="radio" name="q3"> <code>/etc/hosts</code></label>
+<label><input type="radio" name="q3"> <code>~/.bashrc</code></label>
+<label><input type="radio" name="q3"> <code>/etc/passwd</code></label></div><div class="mc" data-answer="2"><p class="mc-q">4. Por que nada aparece quando você digita a senha?</p>
+<label><input type="radio" name="q4"> O teclado travou</label>
+<label><input type="radio" name="q4"> É proposital: a senha não é mostrada</label>
+<label><input type="radio" name="q4"> Precisa apertar Ctrl</label>
+<label><input type="radio" name="q4"> O servidor caiu</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^ssh\b;;out:Permanently added">
+<p class="try-task"><strong>Missão:</strong> conecte pela primeira vez e rode <code>hostname</code> no servidor (aceite a chave com <code>yes</code> e digite a senha).</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor hostname
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+The authenticity of host 'servidor (192.168.0.20)' can't be established.
+ED25519 key fingerprint is SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added 'servidor' (ED25519) to the list of known hosts.
+lab@servidor's password: 
+servidor
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh\b;;outre:^Olá do \S+">
+<p class="try-task"><strong>Missão:</strong> rode no servidor um <code>echo</code> com o nome dele.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'echo Olá do $(hostname)'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+lab@servidor's password: 
+Olá do servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>A primeira conexão pergunta pelo fingerprint: responda <code>yes</code> por extenso.</li>
+<li>A senha não aparece enquanto você digita.</li>
+<li>Sem <code>usuario@</code>, o ssh usa o seu nome local.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

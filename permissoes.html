@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permissões do ~/.ssh: 700, 600 e o UNPROTECTED PRIVATE KEY FILE | Guia SSH</title>
+<meta name="description" content="As permissões que o SSH exige no cliente e no servidor: 700 no ~/.ssh, 600 na chave privada, StrictModes e o aviso UNPROTECTED PRIVATE KEY FILE.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Permissões do <span class="hl">~/.ssh</span></h1>
+
+<p class="intro">O SSH ignora arquivos que outros possam ler ou alterar. Esta aula mostra as permissões certas e o que acontece com as erradas.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>As permissões certas de cada arquivo.</li>
+<li>O aviso <code>UNPROTECTED PRIVATE KEY FILE</code>.</li>
+<li>O StrictModes do servidor e o log dele.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: o ssh confere quem pode ler e escrever</h2>
+<p>O SSH é desconfiado de propósito. Se a sua chave privada puder ser lida por outros usuários, ou se o <code>authorized_keys</code> do servidor puder ser alterado por outros, ele <strong>ignora</strong> o arquivo. As permissões certas:</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Arquivo</th><th>Permissão</th><th>Por quê</th></tr>
+<tr><td><code>~/.ssh</code></td><td><code>700</code> (<code>drwx------</code>)</td><td>só você entra na pasta</td></tr>
+<tr><td><code>~/.ssh/id_ed25519</code> (privada)</td><td><code>600</code> (<code>-rw-------</code>)</td><td>só você lê o segredo</td></tr>
+<tr><td><code>~/.ssh/id_ed25519.pub</code></td><td><code>644</code></td><td>a pública pode ser lida</td></tr>
+<tr><td><code>~/.ssh/authorized_keys</code>, <code>config</code></td><td><code>600</code></td><td>ninguém mais altera</td></tr>
+<tr><td>a pasta pessoal (<code>~</code>) no servidor</td><td>sem escrita para os outros (<code>755</code> ou <code>700</code>)</td><td>senão, outro usuário poderia trocar o <code>.ssh</code></td></tr>
+</table></div>
+<hr>
+<h2>1. Conferir</h2>
+<pre class="term" data-cwd="~">$ ls -ld ~/.ssh
+drwx------ 2 ana ana 4096 nov 21 12:01 /home/ana/.ssh
+$ stat -c '%a %U %n' ~/.ssh ~/.ssh/*
+700 ana /home/ana/.ssh
+600 ana /home/ana/.ssh/id_ed25519
+644 ana /home/ana/.ssh/id_ed25519.pub
+600 ana /home/ana/.ssh/known_hosts
+$</pre>
+<hr>
+<h2>2. Chave privada aberta demais</h2>
+<p>Alguém (ou um <code>cp</code> descuidado) deixou a chave com <code>644</code>. O ssh se recusa a usá-la e cai para a senha:</p>
+<pre class="term" data-cwd="~">$ ls -l ~/.ssh/id_ed25519
+-rw-r--r-- 1 ana ana 399 nov 21 12:01 /home/ana/.ssh/id_ed25519
+$ ssh lab@servidor hostname
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @   « chave legível por outros
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0644 for '/home/ana/.ssh/id_ed25519' are too open.
+It is required that your private key files are NOT accessible by others.
+This private key will be ignored.
+Load key &quot;/home/ana/.ssh/id_ed25519&quot;: bad permissions   « o ssh ignorou a chave
+lab@servidor's password:    « e caiu para a senha
+servidor
+$ chmod 600 ~/.ssh/id_ed25519
+$ ssh lab@servidor hostname
+servidor
+$</pre>
+<hr>
+<h2>3. Do lado do servidor: StrictModes</h2>
+<p>No servidor, o sshd faz a mesma conferência (opção <code>StrictModes</code>, ligada por padrão). Aqui, a pasta <code>/home/lab</code> ficou com escrita para todos (<code>777</code>). O cliente só vê a chave ser recusada; o motivo aparece no log do servidor. (O Debian e o Ubuntu toleram escrita para o <em>grupo</em> quando o grupo só tem o próprio usuário; escrita para todos, nunca.)</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ls -ld /home/lab
+drwxrwxrwx 4 lab lab 4096 nov 21 12:01 /home/lab   « qualquer um pode escrever: perigoso
+$ sudo grep 'bad ownershi[p]' /var/log/auth.log
+2026-11-21T12:01:58.407658-03:00 servidor sshd-session[51]: Authentication refused: bad ownership or modes for directory /home/lab   « o sshd recusou o authorized_keys
+$</pre>
+<p>O <code>[p]</code> no fim do padrão é um truque: assim o <code>grep</code> não acha a linha que o próprio <code>sudo</code> grava no log com o comando. A correção é <code>chmod 755 /home/lab</code> (ou <code>700</code>) no servidor.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Arrumar tudo de uma vez</strong>
+<p>Na dúvida, estes três comandos deixam a pasta do notebook como o ssh gosta:</p>
+<pre class="term" data-cwd="~">$ chmod 700 ~/.ssh
+$ chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+$ chmod 644 ~/.ssh/id_ed25519.pub
+$ stat -c '%a %U %n' ~/.ssh ~/.ssh/*
+700 ana /home/ana/.ssh
+600 ana /home/ana/.ssh/id_ed25519
+644 ana /home/ana/.ssh/id_ed25519.pub
+600 ana /home/ana/.ssh/known_hosts
+$</pre>
+<p>Do lado do servidor, o equivalente é <code>chmod 700 ~/.ssh</code> e <code>chmod 600 ~/.ssh/authorized_keys</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>chmod 700 ~/.ssh</code></td><td>a pasta.</td></tr>
+<tr><td><code>chmod 600 ~/.ssh/id_ed25519</code></td><td>a privada.</td></tr>
+<tr><td><code>chmod 600 ~/.ssh/authorized_keys</code></td><td>no servidor.</td></tr>
+<tr><td><code>stat -c '%a %n' arq</code></td><td>permissão em número.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. A privada</h3><p>Complete a permissão da chave privada:</p><div class="ex-code">chmod <input data-answer="600" aria-label="permissão"> ~/.ssh/id_ed25519</div></div><div class="exercise"><h3>2. A pasta</h3><p>Complete a permissão da pasta ~/.ssh:</p><div class="ex-code">chmod <input data-answer="700" aria-label="permissão"> ~/.ssh</div></div><div class="mc" data-answer="2"><p class="mc-q">3. “UNPROTECTED PRIVATE KEY FILE” quer dizer:</p>
+<label><input type="radio" name="q3"> a chave tem frase</label>
+<label><input type="radio" name="q3"> outros usuários podem ler a sua chave privada</label>
+<label><input type="radio" name="q3"> a chave é antiga</label>
+<label><input type="radio" name="q3"> o servidor recusou</label></div><div class="mc" data-answer="2"><p class="mc-q">4. No servidor, a pasta pessoal com escrita para todos faz o sshd:</p>
+<label><input type="radio" name="q4"> pedir a senha duas vezes</label>
+<label><input type="radio" name="q4"> recusar o authorized_keys</label>
+<label><input type="radio" name="q4"> mudar de porta</label>
+<label><input type="radio" name="q4"> apagar a chave</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:stat;;outre:^700 \S*\.ssh$;;outre:^600 \S*id_ed25519$">
+<p class="try-task"><strong>Missão:</strong> mostre as permissões da pasta <code>~/.ssh</code> e da sua chave privada em números.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+stat -c '%a %n' ~/.ssh ~/.ssh/id_ed25519
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+700 /home/ana/.ssh
+600 /home/ana/.ssh/id_ed25519
+</pre>
+</div><div class="trycmd" data-goal="src:chmod 644;;src:chmod 600;;out:UNPROTECTED PRIVATE KEY FILE">
+<p class="try-task"><strong>Missão:</strong> deixe a chave aberta demais de propósito, veja o aviso e conserte.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+chmod 644 ~/.ssh/id_ed25519; ssh -o BatchMode=yes lab@servidor true; chmod 600 ~/.ssh/id_ed25519
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0644 for '/home/ana/.ssh/id_ed25519' are too open.
+It is required that your private key files are NOT accessible by others.
+This private key will be ignored.
+Load key &quot;/home/ana/.ssh/id_ed25519&quot;: bad permissions
+lab@servidor: Permission denied (publickey,password).
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Privada com 600, pasta com 700.</li>
+<li>Chave aberta demais é ignorada.</li>
+<li>No servidor, a pasta pessoal não pode ter escrita para os outros.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

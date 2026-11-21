@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desligar o login por senha no SSH: PasswordAuthentication no | Guia SSH</title>
+<meta name="description" content="Desligar o login por senha no servidor SSH com PasswordAuthentication no, testar com sshd -t, recarregar e provar do cliente.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Desligando a <span class="hl">senha</span></h1>
+
+<p class="intro">Com a chave funcionando, o servidor pode parar de aceitar senha. Os robôs ficam do lado de fora.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Criar um arquivo em <code>sshd_config.d</code>.</li>
+<li>Testar com <code>sshd -t</code> e recarregar.</li>
+<li>Provar com <code>PubkeyAuthentication=no</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Por que desligar a senha</h2>
+<p>Todo servidor ligado na internet recebe, o dia inteiro, robôs tentando senhas como <code>123456</code> e <code>admin</code>. Com a chave funcionando (Nível 2), dá para fechar essa porta: o servidor passa a aceitar <strong>só chave</strong>.</p>
+<div class="warning"><strong>Deixe uma sessão aberta</strong><p>Antes de mexer no sshd de um servidor remoto, deixe um terminal conectado e teste a mudança em <strong>outro</strong>. Se a configuração nova trancar você do lado de fora, a sessão antiga ainda está lá para desfazer.</p></div>
+<hr>
+<h2>1. Confira que a chave funciona</h2>
+<p>Antes de tudo, no notebook: se esta linha pedir senha, <strong>pare</strong> e volte para a aula do <a href="ssh-copy-id.html">ssh-copy-id</a>.</p>
+<pre class="term" data-cwd="~">$ ssh -o PasswordAuthentication=no lab@servidor hostname
+servidor   « entrou só com a chave
+$</pre>
+<hr>
+<h2>2. O arquivo novo, no servidor</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+PasswordAuthentication no
+$ sudo sshd -t &amp;&amp; sudo kill -HUP &quot;$(cat /run/sshd.pid)&quot;
+$ sudo sshd -T | grep '^passwordauthentication'
+passwordauthentication no   « agora vale
+$</pre>
+<div class="note"><strong>Recarregar sem derrubar ninguém</strong><p>Num servidor comum, depois de mexer na configuração rode <code>sudo sshd -t</code> (confere o arquivo) e <code>sudo systemctl reload ssh</code>. O laboratório do guia não usa o systemd, então manda o mesmo aviso direto ao processo: <code>sudo kill -HUP "$(cat /run/sshd.pid)"</code>. As sessões abertas continuam vivas.</p></div>
+<hr>
+<h2>3. Testando do notebook</h2>
+<p>Com <code>-o PubkeyAuthentication=no</code> o cliente finge não ter chave, como um robô faria:</p>
+<pre class="term" data-cwd="~">$ ssh -o PubkeyAuthentication=no lab@servidor
+lab@servidor: Permission denied (publickey).   « nem pergunta a senha: só chave
+$ ssh lab@servidor hostname
+servidor   « com a chave, tudo igual
+$</pre>
+<p>Repare que a lista entre parênteses mudou: antes era <code>(publickey,password)</code>, agora é só <code>(publickey)</code>.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Erro de digitação</strong>
+<p>Uma letra errada no nome da opção e o sshd recusa o arquivo. Por isso o <code>sshd -t</code> vem antes de recarregar:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ echo 'PasswordAuthentcation no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+PasswordAuthentcation no
+$ sudo sshd -t &amp;&amp; sudo kill -HUP &quot;$(cat /run/sshd.pid)&quot;
+/etc/ssh/sshd_config.d/10-sem-senha.conf: line 1: Bad configuration option: PasswordAuthentcation
+/etc/ssh/sshd_config.d/10-sem-senha.conf: terminating, 1 bad configuration options
+$</pre>
+<p>O <code>&amp;&amp;</code> fez o recarregamento não acontecer: o sshd continua com a configuração antiga, que funciona. Corrija o nome e rode de novo.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>PasswordAuthentication no</code></td><td>só chave.</td></tr>
+<tr><td><code>sudo sshd -t</code></td><td>confere a configuração.</td></tr>
+<tr><td><code>sudo systemctl reload ssh</code></td><td>aplica.</td></tr>
+<tr><td><code>ssh -o PubkeyAuthentication=no</code></td><td>testa sem chave.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. A opção</h3><p>Complete a linha que desliga a senha no servidor:</p><div class="ex-code"><input data-answer="PasswordAuthentication" aria-label="opção"> no</div></div><div class="exercise"><h3>2. Conferir antes</h3><p>Que opção do sshd testa a configuração sem aplicar?</p><div class="ex-code">sudo sshd <input data-answer="-t" aria-label="opção"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Depois de desligar a senha, quem não tem a chave vê:</p>
+<label><input type="radio" name="q3"> a pergunta da senha</label>
+<label><input type="radio" name="q3"> <code>Permission denied (publickey)</code></label>
+<label><input type="radio" name="q3"> <code>Connection refused</code></label>
+<label><input type="radio" name="q3"> nada</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Antes de recarregar o sshd de um servidor remoto, o mais seguro é:</p>
+<label><input type="radio" name="q4"> desligar o servidor</label>
+<label><input type="radio" name="q4"> deixar uma sessão aberta e testar em outra</label>
+<label><input type="radio" name="q4"> apagar o known_hosts</label>
+<label><input type="radio" name="q4"> trocar a senha</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:PasswordAuthentication no;;src:sshd -T;;outre:^passwordauthentication no$">
+<p class="try-task"><strong>Missão:</strong> no servidor, desligue a senha num arquivo em <code>sshd_config.d</code> e mostre que a configuração final mudou. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf &amp;&amp; sudo sshd -T | grep '^passwordauthentication'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+PasswordAuthentication no
+passwordauthentication no
+</pre>
+</div><div class="trycmd" data-goal="src:PubkeyAuthentication=no;;out:Permission denied (publickey)">
+<p class="try-task"><strong>Missão:</strong> com a senha já desligada no servidor, tente entrar sem chave.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o PubkeyAuthentication=no lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+lab@servidor: Permission denied (publickey).
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Chave primeiro, senha depois.</li>
+<li><code>sshd -t</code> antes de recarregar.</li>
+<li>Teste numa segunda sessão.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

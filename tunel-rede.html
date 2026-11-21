@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Túnel SSH até outra máquina da rede do servidor | Guia SSH</title>
+<meta name="description" content="Usar o servidor como ponte com -L para alcançar uma máquina que só a rede do servidor enxerga, inclusive o SSH dela.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Túnel até <span class="hl">outra máquina</span></h1>
+
+<p class="intro">O destino do -L pode ser outra máquina, desde que o servidor a alcance.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Levar uma porta até outra máquina.</li>
+<li>Entender qual trecho é criptografado.</li>
+<li>Entrar por SSH através de um túnel.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: o servidor como ponte</h2>
+<p>O destino do <code>-L</code> não precisa ser o próprio servidor: pode ser <strong>qualquer máquina que o servidor alcance</strong>. No laboratório, a máquina <code>interno</code> (192.168.0.130) tem uma wiki na porta 80, mas fica numa rede que o notebook não enxerga. O servidor enxerga.</p>
+<hr>
+<h2>1. O notebook não chega lá</h2>
+<pre class="term" data-cwd="~">$ curl -sS --max-time 3 http://192.168.0.130/
+curl: (7) Failed to connect to 192.168.0.130 port 80 after 0 ms: Could not connect to server
+$ ssh lab@servidor 'curl -s http://192.168.0.130/'
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;   « do servidor, abre
+$</pre>
+<hr>
+<h2>2. Pelo túnel</h2>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 8081:192.168.0.130:80 lab@servidor
+$ curl -s http://localhost:8081/
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;   « do notebook, pelo servidor
+$</pre>
+<p>O caminho: notebook (porta 8081) → SSH criptografado até o servidor → o servidor abre uma conexão comum até 192.168.0.130:80. Esse último trecho, dentro da rede do servidor, <strong>não</strong> é criptografado pelo SSH.</p>
+<hr>
+<h2>3. Um túnel até o próprio SSH</h2>
+<p>O destino pode ser até outro servidor SSH. Aqui, a porta 2200 do notebook leva à porta 22 do <code>interno</code>, e o ssh entra por ela:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 2200:192.168.0.130:22 lab@servidor
+$ ssh -p 2200 -o HostKeyAlias=interno lab@localhost hostname
+interno   « entrou no interno pelo túnel
+$</pre>
+<p>O <code>HostKeyAlias=interno</code> diz ao ssh para conferir a chave como sendo a do <code>interno</code>, e não a de “localhost”. Para isso existe um jeito bem mais simples, o <a href="proxyjump.html">ProxyJump</a>.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>O servidor também não alcança</strong>
+<p>Se nem o servidor chega ao destino, o túnel abre, mas cada conexão falha lá na ponta. O ssh avisa no terminal em que o túnel foi aberto:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 8082:192.168.0.140:80 lab@servidor
+$ curl -sS --max-time 5 http://localhost:8082/
+curl: (56) Recv failure: Conexão fechada pela outra ponta
+$</pre>
+<p>“connect failed” vem do servidor: confira, nele, se o destino responde (<code>ssh lab@servidor 'curl -s http://destino/'</code>).</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -L 8081:192.168.0.130:80 srv</code></td><td>até outra máquina.</td></tr>
+<tr><td><code>ssh -p 2200 lab@localhost</code></td><td>entra pelo túnel.</td></tr>
+<tr><td><code>-o HostKeyAlias=nome</code></td><td>confere a chave certa.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Outra máquina</h3><p>Complete para levar a porta 8081 do notebook à porta 80 do 192.168.0.130:</p><div class="ex-code">ssh -f -N -L 8081:<input data-answer="192.168.0.130:80" aria-label="destino"> lab@servidor</div></div><div class="exercise"><h3>2. Porta do ssh</h3><p>Que opção do ssh escolhe a porta (para entrar pelo túnel)?</p><div class="ex-code">ssh <input data-answer="-p" aria-label="opção"> 2200 lab@localhost</div></div><div class="mc" data-answer="2"><p class="mc-q">3. No <code>-L</code>, o destino precisa ser alcançável:</p>
+<label><input type="radio" name="q3"> pelo notebook</label>
+<label><input type="radio" name="q3"> pelo servidor</label>
+<label><input type="radio" name="q3"> pela internet</label>
+<label><input type="radio" name="q3"> por todos</label></div><div class="mc" data-answer="2"><p class="mc-q">4. O trecho entre o servidor e o destino:</p>
+<label><input type="radio" name="q4"> é criptografado pelo SSH</label>
+<label><input type="radio" name="q4"> não é criptografado pelo SSH</label>
+<label><input type="radio" name="q4"> não existe</label>
+<label><input type="radio" name="q4"> passa pelo notebook</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-L 8082:127\.0\.0\.1:8080;;out:Painel do servidor">
+<p class="try-task"><strong>Missão:</strong> leve a porta 8082 do notebook até o painel do servidor (127.0.0.1:8080, visto de lá) e baixe a página.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 8082:127.0.0.1:8080 lab@servidor &amp;&amp; curl -s http://localhost:8082/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+</pre>
+</div><div class="trycmd" data-goal="src:-L 2201:localhost:22;;src:-p 2201;;outre:^pelo túnel: \S+$">
+<p class="try-task"><strong>Missão:</strong> abra um túnel da porta 2201 até a porta 22 do servidor e entre por ele.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 2201:localhost:22 lab@servidor &amp;&amp; ssh -p 2201 -o HostKeyAlias=servidor lab@localhost 'echo &quot;pelo túnel: $(hostname)&quot;'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+pelo túnel: servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O servidor é a ponte.</li>
+<li>Do servidor ao destino não há criptografia do SSH.</li>
+<li>Para SSH em cadeia, prefira <code>-J</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ssh-agent e ssh-add: digitar a frase uma vez só | Guia SSH</title>
+<meta name="description" content="Usar o ssh-agent para guardar a chave destravada: eval ssh-agent, ssh-add, -l, -D, -t, -k e os riscos do agent forwarding (-A).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O agente: <span class="hl">ssh-agent</span></h1>
+
+<p class="intro">O agente guarda a chave destravada na memória para você não digitar a frase a cada conexão.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Iniciar o agente e pôr a chave com <code>ssh-add</code>.</li>
+<li>Listar, tirar e pôr prazo nas chaves.</li>
+<li>O que o <code>-A</code> faz e por que tomar cuidado.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: digitar a frase uma vez só</h2>
+<p>O <code>ssh-agent</code> é um programa que fica rodando e <strong>guarda a chave já destravada na memória</strong>. Você digita a frase uma vez, no <code>ssh-add</code>, e o ssh pede a chave ao agente nas próximas conexões. Muitos desktops (GNOME, KDE, macOS) já iniciam um agente sozinhos.</p>
+<hr>
+<h2>1. Iniciar o agente e pôr a chave</h2>
+<pre class="term" data-cwd="~">$ eval &quot;$(ssh-agent -s)&quot;
+Agent pid 48   « o agente está rodando
+$ ssh-add
+Enter passphrase for /home/ana/.ssh/id_ed25519: 
+Identity added: /home/ana/.ssh/id_ed25519 (ana@notebook)   « a chave destravada está no agente
+$ ssh-add -l
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)   « as chaves que o agente guarda
+$ ssh lab@servidor hostname
+servidor
+$ ssh lab@servidor 'echo de novo, sem frase'
+de novo, sem frase
+$</pre>
+<dl class="anatomy"><dt>ssh-agent -s</dt><dd>inicia o agente e imprime as variáveis que dizem onde ele está.</dd><dt>eval &quot;$(…)&quot;</dt><dd>aplica essas variáveis no terminal atual.</dd><dt>ssh-add</dt><dd>põe as chaves padrão no agente (pede a frase).</dd><dt>ssh-add -l</dt><dd>lista as chaves do agente.</dd></dl>
+<hr>
+<h2>2. Tirar as chaves e parar o agente</h2>
+<pre class="term" data-cwd="~">$ eval &quot;$(ssh-agent -s)&quot;
+Agent pid 46
+$ ssh-add -q
+$ ssh-add -t 3600 -q ~/.ssh/id_ed25519
+$ ssh-add -D
+All identities removed.   « o agente esqueceu as chaves
+$ ssh-add -l
+The agent has no identities.   « vazio
+$ eval &quot;$(ssh-agent -k)&quot;
+Agent pid 46 killed   « agente encerrado
+$</pre>
+<p>O <code>-t 3600</code> põe a chave com prazo: depois de uma hora o agente a esquece sozinho. Bom para computadores compartilhados.</p>
+<hr>
+<h2>3. Levar o agente junto: <code>-A</code> (com cuidado)</h2>
+<p>Com <code>-A</code> (<em>agent forwarding</em>), o servidor pode usar o agente do notebook para entrar em outra máquina, sem a chave privada sair do notebook:</p>
+<pre class="term" data-cwd="~">$ eval &quot;$(ssh-agent -s)&quot;
+Agent pid 46
+$ ssh-add -q
+$ ssh -A lab@servidor 'ssh-add -l; ssh -o StrictHostKeyChecking=accept-new lab@interno hostname'
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)   « a chave do notebook, vista do servidor
+Warning: Permanently added 'interno' (ED25519) to the list of known hosts.   « o servidor entrou no interno com a chave da Ana
+interno
+$</pre>
+<div class="warning"><strong>Só em servidor de confiança</strong><p>Enquanto a conexão com <code>-A</code> estiver aberta, o administrador do servidor (o root de lá) pode usar o seu agente para entrar onde a sua chave entra. Para pular de máquina em máquina, prefira o <a href="proxyjump.html">ProxyJump (<code>-J</code>)</a>, que não expõe o agente.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Não há agente</strong>
+<p>Num terminal sem agente (um servidor, uma sessão de texto), o ssh-add não tem com quem falar:</p>
+<pre class="term" data-cwd="~">$ ssh-add -l
+Could not open a connection to your authentication agent.
+$</pre>
+<p>Inicie um com <code>eval "$(ssh-agent -s)"</code> e rode o <code>ssh-add</code> de novo.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>eval &quot;$(ssh-agent -s)&quot;</code></td><td>inicia o agente.</td></tr>
+<tr><td><code>ssh-add</code></td><td>põe a chave.</td></tr>
+<tr><td><code>ssh-add -l</code></td><td>lista.</td></tr>
+<tr><td><code>ssh-add -D</code></td><td>tira todas.</td></tr>
+<tr><td><code>ssh-add -t 3600</code></td><td>com prazo.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Pôr a chave</h3><p>Que comando põe as suas chaves no agente?</p><div class="ex-code"><input data-answer="ssh-add" aria-label="resposta"></div></div><div class="exercise"><h3>2. Listar</h3><p>Complete para listar as chaves do agente:</p><div class="ex-code">ssh-add <input data-answer="-l" aria-label="opção"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. O ssh-agent guarda:</p>
+<label><input type="radio" name="q3"> a senha do servidor</label>
+<label><input type="radio" name="q3"> as chaves privadas já destravadas, na memória</label>
+<label><input type="radio" name="q3"> o known_hosts</label>
+<label><input type="radio" name="q3"> os arquivos copiados</label></div><div class="mc" data-answer="2"><p class="mc-q">4. O <code>ssh -A</code> é arriscado porque:</p>
+<label><input type="radio" name="q4"> deixa a conexão lenta</label>
+<label><input type="radio" name="q4"> o root do servidor pode usar o seu agente enquanto você está conectado</label>
+<label><input type="radio" name="q4"> apaga a chave</label>
+<label><input type="radio" name="q4"> manda a chave privada para o servidor</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh-agent;;src:ssh-add -l;;outre:^256 SHA256:\S+ .*\(ED25519\)$">
+<p class="try-task"><strong>Missão:</strong> inicie um agente, ponha a sua chave nele e liste as chaves.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+eval &quot;$(ssh-agent -s)&quot; &amp;&amp; ssh-add ~/.ssh/id_ed25519 &amp;&amp; ssh-add -l
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Agent pid 46
+Identity added: /home/ana/.ssh/id_ed25519 (ana@notebook)
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)
+</pre>
+</div><div class="trycmd" data-goal="src:ssh-agent;;src:ssh-add -l;;out:The agent has no identities">
+<p class="try-task"><strong>Missão:</strong> inicie um agente novo e mostre que ele começa vazio.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+eval &quot;$(ssh-agent -s)&quot; &amp;&amp; ssh-add -l
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Agent pid 46
+The agent has no identities.
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>A frase vai uma vez, no <code>ssh-add</code>.</li>
+<li><code>-t</code> põe prazo na chave.</li>
+<li><code>-A</code> só em servidor de confiança.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Túnel SSH dinâmico (-D): um proxy SOCKS pelo servidor | Guia SSH</title>
+<meta name="description" content="Túnel SSH dinâmico com -D: um proxy SOCKS5 no notebook, curl com --socks5-hostname e configuração no navegador.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Proxy SOCKS: túnel <span class="hl">dinâmico</span> (-D)</h1>
+
+<p class="intro">Com -D, qualquer programa que saiba usar proxy SOCKS passa a sair pelo servidor.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Abrir um proxy com <code>-D</code>.</li>
+<li>Usar com <code>curl --socks5-hostname</code>.</li>
+<li>Configurar o navegador.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: um proxy para tudo</h2>
+<p>O <code>-L</code> leva <strong>uma</strong> porta a <strong>um</strong> destino. O <strong>túnel dinâmico</strong> (<code>-D</code>) abre no notebook um <strong>proxy SOCKS</strong>: cada programa que usar o proxy diz aonde quer ir, e o servidor faz a conexão. É como se o notebook navegasse “de dentro” do servidor.</p>
+<hr>
+<h2>1. Abrir o proxy</h2>
+<pre class="term" data-cwd="~">$ ssh -f -N -D 1080 lab@servidor
+$ curl -s --socks5-hostname localhost:1080 http://192.168.0.130/
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;   « a wiki, alcançada pelo servidor
+$ curl -s --socks5-hostname localhost:1080 http://localhost:8080/
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;   « localhost aqui é o servidor
+$ curl -s --socks5-hostname localhost:1080 http://interno/
+&lt;h1&gt;Wiki interna&lt;/h1&gt;&lt;p&gt;Só a rede interna enxerga esta página.&lt;/p&gt;
+$</pre>
+<dl class="anatomy"><dt>-D 1080</dt><dd>abre o proxy SOCKS na porta 1080 do notebook.</dd><dt>--socks5-hostname</dt><dd>manda o curl usar o proxy e deixar o <strong>servidor</strong> traduzir os nomes.</dd></dl>
+<p>Repare na última linha: o nome <code>interno</code> só existe para o servidor, e funcionou porque o curl deixou o servidor resolver o nome.</p>
+<div class="tip"><strong>No navegador</strong><p>No Firefox: Configurações → Rede → Configurar conexão → <em>SOCKS v5</em>, host <code>localhost</code>, porta <code>1080</code>, e marque “Proxy DNS ao usar SOCKS v5”. Enquanto o túnel estiver aberto, o navegador vê o que o servidor vê.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>O nome resolvido no lugar errado</strong>
+<p>Com <code>--socks5</code> (sem <code>-hostname</code>), quem traduz o nome é o <strong>notebook</strong>, que não conhece <code>interno</code>:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -D 1080 lab@servidor
+$ curl -sS --socks5 localhost:1080 http://interno/
+curl: (97) Could not resolve proxy: localhost
+$</pre>
+<p>Use <code>--socks5-hostname</code> no curl (ou “Proxy DNS” no navegador) para o servidor resolver os nomes. (A mensagem do curl fala em “proxy”, mas o nome que ele não conseguiu traduzir foi <code>interno</code>.)</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -f -N -D 1080 srv</code></td><td>proxy SOCKS.</td></tr>
+<tr><td><code>curl --socks5-hostname localhost:1080 URL</code></td><td>pelo proxy.</td></tr>
+<tr><td><code>Proxy DNS</code></td><td>no navegador.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Túnel dinâmico</h3><p>Que opção abre um proxy SOCKS no notebook?</p><div class="ex-code">ssh -f -N <input data-answer="-D" aria-label="opção"> 1080 lab@servidor</div></div><div class="exercise"><h3>2. No curl</h3><p>Complete para o servidor resolver os nomes:</p><div class="ex-code">curl -s <input data-answer="--socks5-hostname" aria-label="opção"> localhost:1080 http://interno/</div></div><div class="mc" data-answer="2"><p class="mc-q">3. A diferença entre <code>-L</code> e <code>-D</code>:</p>
+<label><input type="radio" name="q3"> nenhuma</label>
+<label><input type="radio" name="q3"> <code>-L</code> é um destino fixo; <code>-D</code> é um proxy para qualquer destino</label>
+<label><input type="radio" name="q3"> <code>-D</code> é mais lento</label>
+<label><input type="radio" name="q3"> <code>-L</code> não usa SSH</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Com o túnel <code>-D</code>, os sites veem a conexão vindo:</p>
+<label><input type="radio" name="q4"> do notebook</label>
+<label><input type="radio" name="q4"> do servidor</label>
+<label><input type="radio" name="q4"> de lugar nenhum</label>
+<label><input type="radio" name="q4"> do roteador</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-D 1080;;src:--socks5-hostname;;out:Painel do servidor">
+<p class="try-task"><strong>Missão:</strong> abra um proxy SOCKS e baixe o painel do servidor por ele.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -D 1080 lab@servidor &amp;&amp; curl -s --socks5-hostname localhost:1080 http://localhost:8080/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+</pre>
+</div><div class="trycmd" data-goal="src:--socks5-hostname localhost:1089;;outre:^curl: \(7\) Failed to connect">
+<p class="try-task"><strong>Missão:</strong> tente usar um proxy numa porta sem túnel (1089) e veja o erro do curl.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+curl -sS --socks5-hostname localhost:1089 http://localhost:8080/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+curl: (7) Failed to connect to localhost port 1089 after 0 ms: Could not connect to server
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>-D</code> é um proxy para qualquer destino.</li>
+<li>Deixe o servidor resolver os nomes.</li>
+<li>Os sites veem o servidor.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

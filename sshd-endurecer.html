@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Endurecer o servidor SSH: MaxAuthTries, AllowUsers, Port e mais | Guia SSH</title>
+<meta name="description" content="Um arquivo de endurecimento para o sshd: sem senha, sem root, MaxAuthTries, AllowUsers, X11Forwarding e a troca de porta com Port.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Endurecendo o <span class="hl">servidor</span></h1>
+
+<p class="intro">Algumas linhas num arquivo só deixam o servidor bem mais fechado.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Montar um arquivo de endurecimento.</li>
+<li>Conferir com <code>sshd -T</code>.</li>
+<li>Trocar a porta e conectar nela.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Um arquivo com o essencial</h2>
+<p>Juntando o que você viu, mais algumas opções, dá para guardar tudo num arquivo só. Cada linha:</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Linha</th><th>O que faz</th></tr>
+<tr><td><code>PasswordAuthentication no</code></td><td>só chave.</td></tr>
+<tr><td><code>PermitRootLogin no</code></td><td>nada de root direto.</td></tr>
+<tr><td><code>KbdInteractiveAuthentication no</code></td><td>fecha a outra porta de senha (já vem assim no Debian).</td></tr>
+<tr><td><code>MaxAuthTries 3</code></td><td>no máximo 3 tentativas por conexão.</td></tr>
+<tr><td><code>AllowUsers lab</code></td><td>só estes usuários entram, mais ninguém.</td></tr>
+<tr><td><code>X11Forwarding no</code></td><td>sem janelas gráficas pelo SSH.</td></tr>
+</table></div>
+<div class="warning"><strong>Deixe uma sessão aberta</strong><p>Antes de mexer no sshd de um servidor remoto, deixe um terminal conectado e teste a mudança em <strong>outro</strong>. Se a configuração nova trancar você do lado de fora, a sessão antiga ainda está lá para desfazer.</p></div>
+<hr>
+<h2>1. Escrevendo e recarregando</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ printf 'PasswordAuthentication no\nPermitRootLogin no\nKbdInteractiveAuthentication no\nMaxAuthTries 3\nAllowUsers lab\nX11Forwarding no\n' | sudo tee /etc/ssh/sshd_config.d/50-endurecer.conf
+PasswordAuthentication no
+PermitRootLogin no
+KbdInteractiveAuthentication no
+MaxAuthTries 3
+AllowUsers lab
+X11Forwarding no
+$ sudo sshd -t &amp;&amp; sudo kill -HUP &quot;$(cat /run/sshd.pid)&quot;
+$</pre>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin|maxauthtries|allowusers|x11forwarding) '
+maxauthtries 3
+permitrootlogin no
+passwordauthentication no
+x11forwarding no   « o arquivo principal diz yes, mas o seu veio antes
+allowusers lab
+$</pre>
+<hr>
+<h2>2. Testando do notebook</h2>
+<pre class="term" data-cwd="~">$ ssh lab@servidor hostname
+servidor   « o lab, com chave, entra
+$ ssh -o PubkeyAuthentication=no lab@servidor
+lab@servidor: Permission denied (publickey).   « sem chave ou fora do AllowUsers, não
+$ ssh -o BatchMode=yes ana@servidor hostname
+ana@servidor: Permission denied (publickey).
+$</pre>
+<hr>
+<h2>3. E trocar a porta?</h2>
+<p>Mudar a porta 22 para outra (<code>Port 2222</code>) não deixa o servidor mais seguro de verdade, mas diminui muito o lixo nos logs. Quem conecta precisa do <code>-p</code> (ou do <code>Port</code> no config). A chave do servidor é a mesma, então o ssh não pergunta nada:</p>
+<pre class="term" data-cwd="~">$ ssh -p 2222 lab@servidor hostname
+servidor   « na porta nova, entra
+$ ssh lab@servidor hostname
+ssh: connect to host servidor port 22: Connection refused   « na 22, já não há ninguém
+$</pre>
+<div class="warning"><strong>Firewall</strong><p>Se o servidor tiver firewall (<code>ufw</code>, <code>nftables</code>, o painel do provedor), libere a porta nova <strong>antes</strong> de recarregar o sshd.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Usuário fora da lista</strong>
+<p>Com <code>AllowUsers lab</code>, até um usuário que existe e tem a senha certa fica de fora. No log do servidor aparece o motivo:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ sudo grep 'not allowe[d]' /var/log/auth.log
+2026-11-21T12:03:09.261193-03:00 servidor sshd-session[52]: User ana from 192.168.0.10 not allowed because not listed in AllowUsers
+$</pre>
+<p>Esqueceu alguém? Acrescente o nome na mesma linha (<code>AllowUsers lab maria</code>) e recarregue.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>MaxAuthTries 3</code></td><td>tentativas por conexão.</td></tr>
+<tr><td><code>AllowUsers lab</code></td><td>só estes.</td></tr>
+<tr><td><code>Port 2222</code></td><td>outra porta.</td></tr>
+<tr><td><code>ssh -p 2222</code></td><td>conecta nela.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Tentativas</h3><p>Complete para permitir no máximo 3 tentativas por conexão:</p><div class="ex-code">MaxAuthTries <input data-answer="3" aria-label="resposta"></div></div><div class="exercise"><h3>2. Lista de usuários</h3><p>Que opção deixa entrar só os usuários listados?</p><div class="ex-code"><input data-answer="AllowUsers" aria-label="opção"> lab</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Trocar a porta do SSH:</p>
+<label><input type="radio" name="q3"> deixa o servidor impossível de invadir</label>
+<label><input type="radio" name="q3"> diminui o lixo nos logs, mas não substitui a chave</label>
+<label><input type="radio" name="q3"> desliga a senha</label>
+<label><input type="radio" name="q3"> é obrigatório</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Depois de <code>Port 2222</code>, o cliente conecta com:</p>
+<label><input type="radio" name="q4"> <code>ssh lab@servidor:2222</code></label>
+<label><input type="radio" name="q4"> <code>ssh -p 2222 lab@servidor</code></label>
+<label><input type="radio" name="q4"> <code>ssh -P 2222 lab@servidor</code></label>
+<label><input type="radio" name="q4"> <code>ssh lab@servidor 2222</code></label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:MaxAuthTries 3;;src:sshd -T;;outre:^maxauthtries 3$">
+<p class="try-task"><strong>Missão:</strong> no servidor, limite as tentativas a 3 num arquivo em <code>sshd_config.d</code> e confira na configuração final. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+echo 'MaxAuthTries 3' | sudo tee /etc/ssh/sshd_config.d/50-endurecer.conf &amp;&amp; sudo sshd -T | grep '^maxauthtries'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+MaxAuthTries 3
+maxauthtries 3
+</pre>
+</div><div class="trycmd" data-goal="src:-p 2222;;outre:^servidor$">
+<p class="try-task"><strong>Missão:</strong> com o servidor escutando na porta 2222, conecte nela.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -p 2222 lab@servidor hostname
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Um arquivo seu em <code>sshd_config.d</code>.</li>
+<li>Libere o firewall antes de trocar a porta.</li>
+<li><code>AllowUsers</code> barra até quem tem senha.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

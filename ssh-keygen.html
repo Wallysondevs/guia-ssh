@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ssh-keygen: criando uma chave SSH ed25519 | Guia SSH</title>
+<meta name="description" content="Gerar um par de chaves ed25519 com ssh-keygen: frase secreta, -C, -f, -N, fingerprint, randomart e RSA 4096.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Criando a chave: <span class="hl">ssh-keygen</span></h1>
+
+<p class="intro">Um comando cria o seu par de chaves. Esta aula mostra as perguntas do ssh-keygen e o que ele grava.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Gerar uma chave ed25519 com frase.</li>
+<li>Ver o que foi criado sem abrir a privada.</li>
+<li>Gerar sem perguntas, com <code>-f</code> e <code>-N</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: criar o seu par de chaves</h2>
+<p>O <code>ssh-keygen</code> cria o par. Use o tipo <strong>ed25519</strong>: é moderno, rápido e tem chaves curtas. O <code>-C</code> põe um comentário (costuma ser <code>usuario@computador</code>) para você saber, lá no servidor, de quem é cada chave.</p>
+<hr>
+<h2>1. Gerar a chave</h2>
+<p>A Ana gerou a primeira chave dela. O ssh-keygen fez três perguntas: onde salvar (Enter aceita o padrão), e a <strong>frase secreta</strong> (<em>passphrase</em>) duas vezes. A frase protege a chave privada: se alguém copiar o arquivo, ainda precisa dela. Como a senha, ela não aparece enquanto você digita.</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -t ed25519 -C &quot;ana@notebook&quot;
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/home/ana/.ssh/id_ed25519): 
+Created directory '/home/ana/.ssh'.   « a pasta ~/.ssh foi criada
+Enter passphrase for &quot;/home/ana/.ssh/id_ed25519&quot; (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /home/ana/.ssh/id_ed25519   « a chave privada
+Your public key has been saved in /home/ana/.ssh/id_ed25519.pub   « a chave pública
+The key fingerprint is:   « a impressão digital da chave
+SHA256:xUkC9WGWYWmEW5x41POy8R+LpD9JB69nFXtnAz34jQk ana@notebook
+The key's randomart image is:
++--[ED25519 256]--+
+|      .oo*X*     |
+|        oOOoo    |
+|         ==  oo  |
+|        ..  E+.+ |
+|        S    *=o=|
+|            .o+B*|
+|            + =oB|
+|           . = +.|
+|            ..+  |
++----[SHA256]-----+
+$</pre>
+<dl class="anatomy"><dt>-t ed25519</dt><dd>o tipo da chave.</dd><dt>-C &quot;ana@notebook&quot;</dt><dd>o comentário que vai no fim da chave pública.</dd></dl>
+<p>O desenho (<em>randomart</em>) é outra forma de ver o fingerprint: duas chaves diferentes dão desenhos diferentes.</p>
+<hr>
+<h2>2. O que foi criado</h2>
+<pre class="term" data-cwd="~">$ ls -l ~/.ssh
+total 12
+-rw------- 1 ana ana 399 nov 21 12:01 id_ed25519   « privada: permissão 600
+-rw-r--r-- 1 ana ana  94 nov 21 12:01 id_ed25519.pub
+-rw------- 1 ana ana 568 nov 21 12:01 known_hosts
+$ cat ~/.ssh/id_ed25519.pub
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhUpv1BK1coguxPjJIpUIlNaF5MdZXnkYskI28ZKD0p ana@notebook
+$ ssh-keygen -lf ~/.ssh/id_ed25519.pub
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)
+$ file ~/.ssh/id_ed25519
+/home/ana/.ssh/id_ed25519: OpenSSH private key   « o file diz o que é, sem mostrar o conteúdo
+$</pre>
+<p>Para saber o que é um arquivo de chave sem abrir, use <code>file</code> ou <code>ssh-keygen -l</code>. Abrir a privada com <code>cat</code> mostraria o segredo na tela.</p>
+<hr>
+<h2>3. Escolher o nome e não perguntar nada</h2>
+<p>Em scripts, ou para ter uma chave por servidor, passe tudo na linha: <code>-f</code> (arquivo), <code>-N</code> (frase; <code>''</code> = sem frase) e <code>-q</code> (quieto):</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab' -q
+$ ls ~/.ssh
+id_ed25519  id_ed25519.pub  known_hosts  servidor_lab  servidor_lab.pub
+$ ssh-keygen -t rsa -b 4096 -f ~/.ssh/antiga_rsa -N '' -q
+$ ssh-keygen -lf ~/.ssh/antiga_rsa.pub
+4096 SHA256:iM01jGkDJflBCc6SCguZGJ7698sKb9lVlvA5Rkn/5T0 ana@notebook (RSA)   « RSA de 4096 bits: o tipo antigo
+$</pre>
+<div class="tip"><strong>ed25519 ou RSA?</strong><p>Prefira <strong>ed25519</strong>. Use RSA (com <code>-b 4096</code>) só se um sistema antigo não aceitar ed25519.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A chave já existe</strong>
+<p>Rodar o ssh-keygen de novo com o mesmo nome pergunta se pode <strong>sobrescrever</strong>. Responda <code>n</code>: trocar a chave quebra o acesso a todos os servidores onde a antiga está instalada.</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -t ed25519
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/home/ana/.ssh/id_ed25519): 
+/home/ana/.ssh/id_ed25519 already exists.
+Overwrite (y/n)? n
+$</pre>
+<p>Para uma chave nova, escolha outro nome com <code>-f</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh-keygen -t ed25519 -C &quot;eu@pc&quot;</code></td><td>gera a chave.</td></tr>
+<tr><td><code>-f ~/.ssh/nome</code></td><td>outro nome de arquivo.</td></tr>
+<tr><td><code>-N ''</code></td><td>sem frase.</td></tr>
+<tr><td><code>ssh-keygen -lf chave.pub</code></td><td>impressão digital.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O tipo</h3><p>Complete para gerar uma chave do tipo recomendado:</p><div class="ex-code">ssh-keygen -t <input data-answer="ed25519" aria-label="resposta"></div></div><div class="exercise"><h3>2. Sem frase</h3><p>Que valor do <code>-N</code> cria a chave sem frase secreta?</p><div class="ex-code">ssh-keygen -N <input data-answer="''|&quot;&quot;" aria-label="resposta"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Para que serve a frase secreta?</p>
+<label><input type="radio" name="q3"> Para entrar no servidor sem chave</label>
+<label><input type="radio" name="q3"> Para proteger a chave privada se alguém copiar o arquivo</label>
+<label><input type="radio" name="q3"> Para o servidor saber o seu nome</label>
+<label><input type="radio" name="q3"> Para nada</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Como ver a impressão digital de uma chave?</p>
+<label><input type="radio" name="q4"> <code>cat ~/.ssh/id_ed25519</code></label>
+<label><input type="radio" name="q4"> <code>ssh-keygen -lf arquivo.pub</code></label>
+<label><input type="radio" name="q4"> <code>ssh -V</code></label>
+<label><input type="radio" name="q4"> <code>ls -l</code></label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh-keygen;;src:-t ed25519;;src:-f\s+\S*teste_ed25519;;out:Your identification has been saved">
+<p class="try-task"><strong>Missão:</strong> gere uma chave ed25519 de teste chamada <code>teste_ed25519</code>, sem frase.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -t ed25519 -f ~/.ssh/teste_ed25519 -N '' -C teste
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Generating public/private ed25519 key pair.
+Your identification has been saved in /home/ana/.ssh/teste_ed25519
+Your public key has been saved in /home/ana/.ssh/teste_ed25519.pub
+The key fingerprint is:
+SHA256:9vHkhgHxmm8RErV7w+yTJrfC0S8vcVj3XPMzbJlxflo teste
+The key's randomart image is:
++--[ED25519 256]--+
+|        o..      |
+|         + .     |
+|        o +      |
+|         = =  .o+|
+|        S =.*o.+X|
+|       . o.@+o.BE|
+|         .*.X+.o+|
+|         .o=ooo  |
+|           ..+.  |
++----[SHA256]-----+
+</pre>
+</div><div class="trycmd" data-goal="src:ssh-keygen -lf;;outre:^256 SHA256:\S+ .*\(ED25519\)$">
+<p class="try-task"><strong>Missão:</strong> mostre a impressão digital da sua chave pública.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Use ed25519.</li>
+<li>Ponha frase na chave do dia a dia.</li>
+<li>Não sobrescreva uma chave em uso.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

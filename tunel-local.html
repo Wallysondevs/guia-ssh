@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Túnel SSH local (-L): abrindo no notebook uma porta do servidor | Guia SSH</title>
+<meta name="description" content="Túnel SSH local com -L: acessar no notebook um serviço que só escuta em localhost no servidor, com -f e -N.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Túnel <span class="hl">local</span> (-L)</h1>
+
+<p class="intro">O -L traz para o seu computador uma porta que só existe dentro do servidor.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Abrir um túnel com <code>-L</code>.</li>
+<li>Usar <code>-f</code> e <code>-N</code>.</li>
+<li>Escolher a porta local.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: trazer uma porta do servidor para o notebook</h2>
+<p>O servidor tem um painel web que só escuta em <code>127.0.0.1:8080</code>, ou seja, só abre <strong>de dentro</strong> do próprio servidor. É assim, de propósito, com muitos painéis e bancos de dados. Um <strong>túnel local</strong> (<code>-L</code>) abre uma porta no notebook e leva tudo o que chega nela, por dentro do SSH, até o servidor.</p>
+<pre class="cmd">
+ssh -L porta_no_notebook:destino:porta_do_destino usuario@servidor
+</pre>
+<p>O <code>destino</code> é visto <strong>a partir do servidor</strong>: <code>localhost</code> ali quer dizer “o próprio servidor”.</p>
+<hr>
+<h2>1. Antes do túnel</h2>
+<pre class="term" data-cwd="~">$ curl -sS http://localhost:8080/
+curl: (7) Failed to connect to localhost port 8080 after 0 ms: Could not connect to server   « no notebook, nada na porta 8080
+$ ssh lab@servidor 'curl -s http://localhost:8080/'
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;   « no servidor, o painel responde
+$</pre>
+<hr>
+<h2>2. Abrindo o túnel</h2>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 8080:localhost:8080 lab@servidor
+$ curl -s http://localhost:8080/
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;   « o painel, aberto no notebook
+$ ss -ltn | grep 8080
+LISTEN 0      128        127.0.0.1:8080      0.0.0.0:*      « a porta do túnel, só no notebook
+LISTEN 0      128            [::1]:8080         [::]:*   
+$</pre>
+<div class="note"><strong>-f e -N</strong><p><code>-N</code>: não roda comando nenhum, só mantém o túnel. <code>-f</code>: vai para o segundo plano depois de conectar, devolvendo o terminal. Para fechar, use <code>pkill -f "ssh -f -N"</code> (ou o <code>kill</code> com o número do processo).</p></div>
+<p>No navegador do notebook, <code>http://localhost:8080</code> abre o painel. A porta local não precisa ser igual à remota:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 9000:localhost:8080 lab@servidor
+$ curl -s http://localhost:9000/
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+$</pre>
+<div class="tip"><strong>Só no notebook</strong><p>Por padrão, a porta do túnel escuta só em <code>127.0.0.1</code>: outras máquinas da sua rede não a enxergam. Mais seguro assim.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A porta já está em uso</strong>
+<p>Abrir o mesmo túnel duas vezes (ou numa porta que outro programa usa) não funciona. O ssh avisa, mas a conexão continua, sem túnel:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 8080:localhost:8080 lab@servidor
+$ ssh -f -N -L 8080:localhost:8080 lab@servidor
+bind [127.0.0.1]:8080: Address already in use
+channel_setup_fwd_listener_tcpip: cannot listen to port: 8080
+Could not request local forwarding.
+$</pre>
+<p>Escolha outra porta local, ou feche o túnel antigo. Em scripts, use <code>-o ExitOnForwardFailure=yes</code>, que faz o ssh desistir (aula <a href='tuneis-config.html'>Túneis no config</a>).</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -L 8080:localhost:8080 srv</code></td><td>túnel local.</td></tr>
+<tr><td><code>-f -N</code></td><td>segundo plano, sem comando.</td></tr>
+<tr><td><code>ss -ltn</code></td><td>portas escutando.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Túnel local</h3><p>Que opção abre um túnel local?</p><div class="ex-code">ssh <input data-answer="-L" aria-label="opção"> 8080:localhost:8080 lab@servidor</div></div><div class="exercise"><h3>2. Só o túnel</h3><p>Que opção diz “não rode comando, só mantenha o túnel”?</p><div class="ex-code">ssh -f <input data-answer="-N" aria-label="opção"> -L 8080:localhost:8080 lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Em <code>-L 8080:localhost:8080</code>, o segundo <code>localhost</code> é:</p>
+<label><input type="radio" name="q3"> o notebook</label>
+<label><input type="radio" name="q3"> o servidor (visto de lá)</label>
+<label><input type="radio" name="q3"> a internet</label>
+<label><input type="radio" name="q3"> o roteador</label></div><div class="mc" data-answer="2"><p class="mc-q">4. A porta do túnel local, por padrão, escuta em:</p>
+<label><input type="radio" name="q4"> todas as placas de rede</label>
+<label><input type="radio" name="q4"> só 127.0.0.1 do notebook</label>
+<label><input type="radio" name="q4"> no servidor</label>
+<label><input type="radio" name="q4"> na internet</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-L 8080:localhost:8080;;out:Painel do servidor">
+<p class="try-task"><strong>Missão:</strong> abra um túnel até o painel do servidor e baixe a página pelo túnel.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 8080:localhost:8080 lab@servidor &amp;&amp; curl -s http://localhost:8080/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+</pre>
+</div><div class="trycmd" data-goal="src:-L;;src:ss -ltn;;outre:^LISTEN\s.*127\.0\.0\.1:8080\s">
+<p class="try-task"><strong>Missão:</strong> abra o túnel e mostre a porta 8080 escutando no notebook.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 8080:localhost:8080 lab@servidor &amp;&amp; ss -ltn | grep ':8080 '
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+LISTEN 0      128        127.0.0.1:8080      0.0.0.0:*   
+LISTEN 0      128            [::1]:8080         [::]:*   
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>-L local:destino:porta</code>.</li>
+<li>O destino é visto pelo servidor.</li>
+<li>A porta local escuta só em 127.0.0.1.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

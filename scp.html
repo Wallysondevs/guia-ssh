@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scp: copiando arquivos e pastas pelo SSH | Guia SSH</title>
+<meta name="description" content="Enviar e baixar arquivos com scp: o formato usuario@computador:caminho, -r para pastas, -P para porta e o erro dos dois-pontos.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Copiando com <span class="hl">scp</span></h1>
+
+<p class="intro">O scp é o cp entre computadores. Esta aula mostra os dois sentidos e o erro mais comum.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Enviar e trazer arquivos.</li>
+<li>Copiar pastas com <code>-r</code>.</li>
+<li>Não esquecer os dois-pontos.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: cp entre computadores</h2>
+<p>O <code>scp</code> copia arquivos pelo SSH, com a mesma cara do <code>cp</code>: <code>scp origem destino</code>. O lado remoto se escreve <code>usuario@computador:caminho</code>. Os <strong>dois-pontos</strong> são o que diz “é no outro computador”; caminho vazio depois deles é a pasta pessoal.</p>
+<hr>
+<h2>1. Enviar do notebook para o servidor</h2>
+<pre class="term" data-cwd="~">$ scp notas.txt lab@servidor:
+notas.txt                                                         100%   53   226.2KB/s   00:00       « nome, progresso, tamanho, velocidade e tempo
+$ scp notas.txt lab@servidor:/tmp/notas-da-ana.txt
+notas.txt                                                         100%   53   235.0KB/s   00:00    
+$ ssh lab@servidor 'ls; ls /tmp'
+notas.txt
+relatorio.txt
+site
+notas-da-ana.txt
+$</pre>
+<hr>
+<h2>2. Trazer do servidor</h2>
+<pre class="term" data-cwd="~">$ scp lab@servidor:relatorio.txt .
+relatorio.txt                                                     100%   47   154.7KB/s   00:00    
+$ cat relatorio.txt
+Relatório mensal
+vendas: 42
+clientes novos: 7
+$</pre>
+<p>O <code>.</code> no fim é “aqui, na pasta atual”.</p>
+<hr>
+<h2>3. Pastas inteiras: <code>-r</code></h2>
+<pre class="term" data-cwd="~">$ scp -r projeto lab@servidor:
+estilo.css                                                        100%   22   160.6KB/s   00:00    
+README.md                                                         100%   34   515.1KB/s   00:00    
+logo.png                                                          100% 2048    16.1MB/s   00:00    
+index.html                                                        100%   14   111.8KB/s   00:00    
+$ ssh lab@servidor 'ls -R projeto'
+projeto:
+estilo.css
+img
+index.html
+README.md
+
+projeto/img:
+logo.png
+$</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Opção</th><th>O que faz</th></tr>
+<tr><td><code>-r</code></td><td>copia pastas, com tudo dentro</td></tr>
+<tr><td><code>-P 2222</code></td><td>porta (<strong>P maiúsculo</strong> no scp; no ssh é <code>-p</code> minúsculo)</td></tr>
+<tr><td><code>-p</code></td><td>mantém datas e permissões</td></tr>
+<tr><td><code>-i chave</code></td><td>escolhe a chave</td></tr>
+</table></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Esqueci os dois-pontos</strong>
+<p>Sem os <code>:</code>, o scp entende <code>lab@servidor</code> como um <strong>nome de arquivo local</strong>. Ele não reclama: só copia dentro do próprio notebook.</p>
+<pre class="term" data-cwd="~">$ scp notas.txt lab@servidor
+$ ls
+lab@servidor  notas.txt  projeto  site
+$</pre>
+<p>Viu um arquivo chamado <code>lab@servidor</code> aparecer? Apague-o e rode de novo com os dois-pontos: <code>lab@servidor:</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>scp arq lab@srv:</code></td><td>envia.</td></tr>
+<tr><td><code>scp lab@srv:arq .</code></td><td>traz.</td></tr>
+<tr><td><code>scp -r pasta lab@srv:</code></td><td>pasta.</td></tr>
+<tr><td><code>scp -P 2222 …</code></td><td>porta.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O lado remoto</h3><p>Complete para enviar à pasta pessoal do lab:</p><div class="ex-code">scp notas.txt lab@servidor<input data-answer=":" aria-label="símbolo"></div></div><div class="exercise"><h3>2. Pasta inteira</h3><p>Que opção do scp copia uma pasta?</p><div class="ex-code">scp <input data-answer="-r" aria-label="opção"> projeto lab@servidor:</div></div><div class="mc" data-answer="2"><p class="mc-q">3. No scp, a porta se escolhe com:</p>
+<label><input type="radio" name="q3"> <code>-p</code></label>
+<label><input type="radio" name="q3"> <code>-P</code></label>
+<label><input type="radio" name="q3"> <code>--port</code></label>
+<label><input type="radio" name="q3"> <code>:22</code></label></div><div class="mc" data-answer="2"><p class="mc-q">4. <code>scp lab@servidor:relatorio.txt .</code>:</p>
+<label><input type="radio" name="q4"> envia o relatório</label>
+<label><input type="radio" name="q4"> traz o relatório para a pasta atual</label>
+<label><input type="radio" name="q4"> apaga o relatório</label>
+<label><input type="radio" name="q4"> dá erro</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^scp\b;;src:lab@servidor:relatorio\.txt;;outre:^vendas: \d+$">
+<p class="try-task"><strong>Missão:</strong> traga o <code>relatorio.txt</code> do servidor e mostre as vendas.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+scp lab@servidor:relatorio.txt . &amp;&amp; grep vendas relatorio.txt
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+relatorio.txt                                                     100%   47   196.7KB/s   00:00    
+vendas: 42
+</pre>
+</div><div class="trycmd" data-goal="src:^scp\b;;src:head -1;;outre:^Anotações da Ana$">
+<p class="try-task"><strong>Missão:</strong> envie o <code>notas.txt</code> e mostre a primeira linha dele, lá no servidor.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+scp notas.txt lab@servidor: &amp;&amp; ssh lab@servidor 'head -1 notas.txt'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+notas.txt                                                         100%   53   347.3KB/s   00:00    
+Anotações da Ana
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Os <code>:</code> indicam o outro computador.</li>
+<li><code>-r</code> para pastas.</li>
+<li>No scp a porta é <code>-P</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

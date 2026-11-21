@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ssh-copy-id: instalando a chave pública no servidor | Guia SSH</title>
+<meta name="description" content="Copiar a chave pública para o authorized_keys do servidor com ssh-copy-id, com -i, e conferir o login sem senha.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Instalando a chave: <span class="hl">ssh-copy-id</span></h1>
+
+<p class="intro">Com a chave criada, falta levar a parte pública ao servidor. O ssh-copy-id faz isso com uma última senha.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Instalar a chave com <code>ssh-copy-id</code>.</li>
+<li>Ver o resultado no servidor.</li>
+<li>Escolher a chave com <code>-i</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: instalar a chave pública no servidor</h2>
+<p>O <code>ssh-copy-id</code> faz login com a <strong>senha</strong> uma última vez e acrescenta a sua chave pública ao <code>~/.ssh/authorized_keys</code> do servidor, criando a pasta e acertando as permissões. Daí em diante, entra-se com a chave.</p>
+<hr>
+<h2>1. Copiar a chave</h2>
+<pre class="term" data-cwd="~">$ ssh-copy-id lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;   « qual chave ele vai instalar
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+lab@servidor's password:    « a última vez que a senha é pedida
+
+Number of key(s) added: 1   « instalada
+
+Now try logging into the machine, with: &quot;ssh 'lab@servidor'&quot;   « entrou sem senha
+and check to make sure that only the key(s) you wanted were added.
+$ ssh lab@servidor hostname
+servidor
+$</pre>
+<p>No servidor, o <code>ssh-copy-id</code> deixou a pasta e o arquivo com as permissões certas (<code>700</code> e <code>600</code>):</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ls -la ~/.ssh
+total 12
+drwx------ 2 lab lab 4096 nov 21 12:01 .
+drwxr-xr-x 4 lab lab 4096 nov 21 12:01 ..
+-rw------- 1 lab lab   94 nov 21 12:01 authorized_keys
+$ cat ~/.ssh/authorized_keys
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhUpv1BK1coguxPjJIpUIlNaF5MdZXnkYskI28ZKD0p ana@notebook
+$</pre>
+<hr>
+<h2>2. Rodar de novo não duplica</h2>
+<pre class="term" data-cwd="~">$ ssh-copy-id lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+
+/usr/bin/ssh-copy-id: WARNING: All keys were skipped because they already exist on the remote system.   « a chave já estava lá
+		(if you think this is a mistake, you may want to use -f option)
+$</pre>
+<hr>
+<h2>3. Escolher qual chave instalar: <code>-i</code></h2>
+<p>Com várias chaves, o <code>-i</code> diz qual instalar. Como a chave padrão já estava no servidor, nem precisou de senha:</p>
+<pre class="term" data-cwd="~">$ ssh-copy-id -i ~/.ssh/servidor_lab.pub lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/servidor_lab.pub&quot;
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with: &quot;ssh -i /home/ana/.ssh/servidor_lab 'lab@servidor'&quot;
+and check to make sure that only the key(s) you wanted were added.
+$ ssh -i ~/.ssh/servidor_lab lab@servidor 'tail -1 ~/.ssh/authorized_keys'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBMb+0E2Yg6UogPlI99S0FwsS4cAPW7FZcMs4qj1tGXQ chave do lab   « a chave nova, no fim do arquivo
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Ainda não existe chave</strong>
+<p>Sem chave em <code>~/.ssh</code>, o ssh-copy-id não tem o que copiar:</p>
+<pre class="term" data-cwd="~">$ ssh-copy-id lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: 
+/usr/bin/ssh-copy-id: ERROR: No identities found
+$</pre>
+<p>Gere a chave antes, com <code>ssh-keygen -t ed25519</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh-copy-id lab@servidor</code></td><td>instala a chave padrão.</td></tr>
+<tr><td><code>ssh-copy-id -i arq.pub lab@servidor</code></td><td>instala outra chave.</td></tr>
+<tr><td><code>ssh -o PasswordAuthentication=no …</code></td><td>prova que entra sem senha.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Instalar</h3><p>Complete para instalar a sua chave no servidor:</p><div class="ex-code"><input data-answer="ssh-copy-id" aria-label="comando"> lab@servidor</div></div><div class="exercise"><h3>2. Outra chave</h3><p>Complete para instalar a chave <code>servidor_lab.pub</code>:</p><div class="ex-code">ssh-copy-id <input data-answer="-i" aria-label="opção"> ~/.ssh/servidor_lab.pub lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. O ssh-copy-id pede a senha porque:</p>
+<label><input type="radio" name="q3"> a chave está errada</label>
+<label><input type="radio" name="q3"> precisa entrar uma vez para instalar a chave</label>
+<label><input type="radio" name="q3"> sempre vai pedir</label>
+<label><input type="radio" name="q3"> o servidor caiu</label></div><div class="mc" data-answer="3"><p class="mc-q">4. Rodar o ssh-copy-id duas vezes:</p>
+<label><input type="radio" name="q4"> duplica a chave</label>
+<label><input type="radio" name="q4"> apaga a chave</label>
+<label><input type="radio" name="q4"> não duplica: ele avisa que a chave já existe</label>
+<label><input type="radio" name="q4"> trava o servidor</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^ssh-copy-id\b;;out:Number of key(s) added: 1">
+<p class="try-task"><strong>Missão:</strong> instale a sua chave pública no servidor.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-copy-id lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+lab@servidor's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with: &quot;ssh 'lab@servidor'&quot;
+and check to make sure that only the key(s) you wanted were added.
+</pre>
+</div><div class="trycmd" data-goal="src:PasswordAuthentication=no;;outre:^entrei sem senha$">
+<p class="try-task"><strong>Missão:</strong> prove que entra sem senha: proíba a senha só nesta conexão.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o PasswordAuthentication=no lab@servidor 'echo entrei sem senha'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+entrei sem senha
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O ssh-copy-id pede a senha uma última vez.</li>
+<li>Ele acerta as permissões no servidor.</li>
+<li>Rodar de novo não duplica.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

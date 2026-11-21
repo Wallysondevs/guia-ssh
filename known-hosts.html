@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>known_hosts, fingerprint e ssh-keyscan | Guia SSH</title>
+<meta name="description" content="Como o ssh guarda e confere a chave dos servidores no ~/.ssh/known_hosts: ssh-keygen -F, -R, -lf e ssh-keyscan.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">known_hosts</span> e fingerprints</h1>
+
+<p class="intro">O known_hosts é a agenda de servidores em que você já confiou. Esta aula mostra como ler, conferir e limpar essa agenda.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Procurar e apagar entradas com <code>ssh-keygen -F</code> e <code>-R</code>.</li>
+<li>Conferir o fingerprint no servidor.</li>
+<li>Ler a chave de um servidor com <code>ssh-keyscan</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: a agenda de servidores conhecidos</h2>
+<p>Cada servidor SSH tem um <strong>par de chaves de host</strong>, criado quando o <code>openssh-server</code> é instalado. Quando você aceita a chave na primeira conexão, o ssh anota no arquivo <code>~/.ssh/known_hosts</code>: “este nome tem esta chave”. Nas próximas vezes, ele confere. Se a chave mudar, o ssh <strong>se recusa a conectar</strong>, porque alguém pode estar fingindo ser o seu servidor (o ataque “homem do meio”).</p>
+<hr>
+<h2>1. O arquivo known_hosts</h2>
+<pre class="term" data-cwd="~">$ ls -l ~/.ssh
+total 4
+-rw------- 1 ana ana 568 nov 21 12:01 known_hosts
+$ cat ~/.ssh/known_hosts
+|1|IgMsZ9/1HBHNVo/hTfF/2DjVvC8=|MZoeyAuYSy/ENfxAzQHkrhXXmaI= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINM6SGh5h96kOv8/Cg/bkoIlywT9DTgOpraeFBwMa4Ob   « o nome vem embaralhado (HashKnownHosts)
+|1|15w5cjx0ot44APRIe80a8vUUEn8=|06YldArxx/imWxmMpPNocGDgmVE= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINM6SGh5h96kOv8/Cg/bkoIlywT9DTgOpraeFBwMa4Ob
+|1|9b3GSU5Iz7mWRWSZiZ40+edIqGk=|Gkm47fIRY8ruvozz1ahqe+fH2Ew= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINDQKB9YoUIHWjIya/uXCvOyDFSOWZ9bpeJjK+qKH015
+|1|cmKyOW440cPhk2JgoXA85ypcxh4=|vZqM3qVdZUd0J1cGSmYrodQguN0= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINDQKB9YoUIHWjIya/uXCvOyDFSOWZ9bpeJjK+qKH015
+$</pre>
+<p>No Debian e no Ubuntu os nomes ficam <strong>embaralhados</strong> (<code>|1|…</code>), para que ninguém descubra, lendo o arquivo, em que servidores você entra. Para procurar um servidor, use o <code>ssh-keygen -F</code>:</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -F servidor
+# Host servidor found: line 1    « achou: linha 1 do arquivo
+|1|21Md2Vf9fj8V9J9wAO9Chptabdo=|xFV1PbdgWQiuJin3f8FvJAH7Ncs= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINM6SGh5h96kOv8/Cg/bkoIlywT9DTgOpraeFBwMa4Ob
+$</pre>
+<hr>
+<h2>2. Conferir a impressão digital no servidor</h2>
+<p>Antes de digitar <code>yes</code>, compare o fingerprint com o do servidor. Quem tem acesso ao servidor (pelo console, por exemplo) vê assim:</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+256 SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE root@servidor (ED25519)   « tem de ser igual ao da pergunta
+$</pre>
+<dl class="anatomy"><dt>ssh-keygen -l</dt><dd>mostra o fingerprint de uma chave.</dd><dt>-f arquivo</dt><dd>qual chave.</dd><dt>ssh_host_ed25519_key.pub</dt><dd>a parte pública da chave de host do tipo ED25519.</dd></dl>
+<p>Do lado do cliente, o <code>ssh-keyscan</code> pergunta a chave ao servidor sem fazer login. Junto com o <code>ssh-keygen -lf -</code>, mostra o mesmo fingerprint:</p>
+<pre class="term" data-cwd="~">$ ssh-keyscan -t ed25519 servidor
+# servidor:22 SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4
+servidor ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINM6SGh5h96kOv8/Cg/bkoIlywT9DTgOpraeFBwMa4Ob
+$ ssh-keyscan -t ed25519 servidor 2&gt;/dev/null | ssh-keygen -lf -
+256 SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE servidor (ED25519)
+$</pre>
+<p>As duas impressões digitais batem com a da pergunta da primeira conexão. Só confie se forem iguais.</p>
+<hr>
+<h2>3. Esquecer um servidor: <code>ssh-keygen -R</code></h2>
+<p>Se o servidor foi reinstalado (e por isso ganhou chaves novas), apague a entrada antiga:</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -R servidor
+# Host servidor found: line 1
+/home/ana/.ssh/known_hosts updated.
+Original contents retained as /home/ana/.ssh/known_hosts.old   « ele guarda uma cópia do arquivo antigo
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Conferência rígida</strong>
+<p>Com <code>StrictHostKeyChecking=yes</code> (comum em scripts), o ssh não pergunta nada: se não conhece o servidor, recusa:</p>
+<pre class="term" data-cwd="~">$ ssh -o StrictHostKeyChecking=yes lab@servidor hostname
+No ED25519 host key is known for servidor and you have requested strict checking.
+Host key verification failed.
+$</pre>
+<p>Em scripts, prefira guardar a chave antes (com <code>ssh-keyscan</code>, conferindo o fingerprint) a desligar a conferência.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh-keygen -F servidor</code></td><td>procura no known_hosts.</td></tr>
+<tr><td><code>ssh-keygen -R servidor</code></td><td>apaga do known_hosts.</td></tr>
+<tr><td><code>ssh-keygen -lf arquivo.pub</code></td><td>fingerprint de uma chave.</td></tr>
+<tr><td><code>ssh-keyscan servidor</code></td><td>pergunta a chave do servidor.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Procurar</h3><p>Complete para procurar o servidor no known_hosts:</p><div class="ex-code">ssh-keygen <input data-answer="-F" aria-label="opção"> servidor</div></div><div class="exercise"><h3>2. Apagar</h3><p>Complete para apagar a entrada do servidor:</p><div class="ex-code">ssh-keygen <input data-answer="-R" aria-label="opção"> servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Por que o ssh guarda a chave do servidor?</p>
+<label><input type="radio" name="q3"> Para ir mais rápido</label>
+<label><input type="radio" name="q3"> Para perceber se outro computador fingir ser o servidor</label>
+<label><input type="radio" name="q3"> Para guardar a senha</label>
+<label><input type="radio" name="q3"> Para economizar internet</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Os nomes no known_hosts aparecem como <code>|1|…</code> porque:</p>
+<label><input type="radio" name="q4"> o arquivo está corrompido</label>
+<label><input type="radio" name="q4"> estão embaralhados de propósito (HashKnownHosts)</label>
+<label><input type="radio" name="q4"> são senhas</label>
+<label><input type="radio" name="q4"> o ssh é antigo</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh-keygen -F;;out:# Host servidor found">
+<p class="try-task"><strong>Missão:</strong> procure o <code>servidor</code> no seu known_hosts.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -F servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+# Host servidor found: line 1 
+|1|QqcfkmZa3B1VxXYjy+K9nvY2+10=|Bnd9toIHEMfaQr5rI0E6uF7R0cs= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINM6SGh5h96kOv8/Cg/bkoIlywT9DTgOpraeFBwMa4Ob
+</pre>
+</div><div class="trycmd" data-goal="src:ssh-keyscan;;src:ssh-keygen -lf;;outre:^256 SHA256:\S+ .*\(ED25519\)$">
+<p class="try-task"><strong>Missão:</strong> mostre o fingerprint da chave ED25519 do servidor sem fazer login.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keyscan -t ed25519 servidor 2&gt;/dev/null | ssh-keygen -lf -
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+256 SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE servidor (ED25519)
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O known_hosts protege contra servidor falso.</li>
+<li>Confira o fingerprint antes do <code>yes</code>.</li>
+<li>Servidor reinstalado: <code>ssh-keygen -R</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

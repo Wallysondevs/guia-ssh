@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProxyJump (-J): entrando num servidor interno passando por outro | Guia SSH</title>
+<meta name="description" content="Usar ProxyJump (-J) para chegar a um servidor interno passando por um bastion, no comando e no ~/.ssh/config.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Saltos com <span class="hl">ProxyJump</span></h1>
+
+<p class="intro">O -J entra num servidor através de outro, com a sua chave e sem expor o agente.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Pular com <code>-J</code>.</li>
+<li>Guardar o salto com <code>ProxyJump</code>.</li>
+<li>A pergunta do fingerprint do destino.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: pular de máquina em máquina</h2>
+<p>Em muitas empresas, os servidores internos não aceitam conexão de fora: primeiro se entra num servidor de entrada (o “bastion”) e, dele, nos outros. O <strong>ProxyJump</strong> (<code>-J</code>) faz os dois saltos num comando só, e a autenticação no destino é feita <strong>pelo notebook</strong>, com a chave do notebook. Nada fica guardado no servidor do meio, e o agente não é exposto (ao contrário do <code>-A</code>).</p>
+<hr>
+<h2>1. Sem o salto, não chega</h2>
+<pre class="term" data-cwd="~">$ ssh lab@interno hostname
+ssh: Could not resolve hostname interno: Temporary failure in name resolution
+$ ssh -o ConnectTimeout=3 lab@192.168.0.130 hostname
+ssh: connect to host 192.168.0.130 port 22: Network is unreachable
+$</pre>
+<hr>
+<h2>2. Com <code>-J</code></h2>
+<pre class="term" data-cwd="~">$ ssh -J lab@servidor lab@192.168.0.130 hostname
+interno   « chegou ao interno, passando pelo servidor
+$ ssh -J lab@servidor lab@192.168.0.130 'ip -br addr'
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+in0@if3          UP             192.168.0.130/25 
+$</pre>
+<dl class="anatomy"><dt>-J lab@servidor</dt><dd>o salto: primeiro conecta aqui.</dd><dt>lab@192.168.0.130</dt><dd>o destino final, visto pelo servidor.</dd></dl>
+<p>Dá para encadear saltos com vírgula: <code>-J lab@a,lab@b destino</code>.</p>
+<hr>
+<h2>3. No config: <code>ProxyJump</code></h2>
+<pre class="term" data-cwd="~">$ cat ~/.ssh/config
+Host servidor
+    HostName 192.168.0.20
+    User lab
+
+Host interno
+    HostName 192.168.0.130
+    User lab
+    ProxyJump servidor   « o salto, guardado no config
+$ ssh interno hostname
+interno
+$ ssh -G interno | grep -i '^proxyjump'
+proxyjump servidor
+$ scp notas.txt interno:
+notas.txt                                                         100%   53   174.8KB/s   00:00    
+$ ssh interno ls
+notas.txt
+wiki
+$</pre>
+<p>Com o bloco no config, <code>ssh</code>, <code>scp</code>, <code>sftp</code> e <code>rsync</code> pulam sozinhos.</p>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A pergunta do fingerprint, para o destino</strong>
+<p>Cada máquina tem a sua chave de host. Na primeira vez no <code>interno</code>, o notebook pergunta por ela (o “no hostip for proxy command” é normal: quem conectou foi o servidor do meio):</p>
+<pre class="term" data-cwd="~">$ ssh -J lab@servidor lab@192.168.0.130 hostname
+The authenticity of host '192.168.0.130 (&lt;no hostip for proxy command&gt;)' can't be established.
+ED25519 key fingerprint is SHA256:lbdIgm8/vYGYCdvOnY5COUJZ4pDV5o5pi9/TE3kHRRE.
+This host key is known by the following other names/addresses:
+    ~/.ssh/known_hosts:3: [hashed name]
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.0.130' (ED25519) to the list of known hosts.
+interno
+$</pre>
+<p>Confira o fingerprint no próprio interno (<code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code>) e responda <code>yes</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -J lab@srv lab@destino</code></td><td>um salto.</td></tr>
+<tr><td><code>-J a,b</code></td><td>dois saltos.</td></tr>
+<tr><td><code>ProxyJump srv</code></td><td>no config.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O salto</h3><p>Que opção do ssh faz o salto?</p><div class="ex-code">ssh <input data-answer="-J" aria-label="opção"> lab@servidor lab@192.168.0.130</div></div><div class="exercise"><h3>2. No config</h3><p>Que opção do config guarda o salto?</p><div class="ex-code">    <input data-answer="ProxyJump" aria-label="opção"> servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Com <code>-J</code>, a chave privada usada no destino fica:</p>
+<label><input type="radio" name="q3"> no servidor do meio</label>
+<label><input type="radio" name="q3"> no notebook</label>
+<label><input type="radio" name="q3"> no destino</label>
+<label><input type="radio" name="q3"> no agente do servidor</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Por que preferir <code>-J</code> a <code>-A</code>?</p>
+<label><input type="radio" name="q4"> É mais rápido</label>
+<label><input type="radio" name="q4"> Não expõe o seu agente ao servidor do meio</label>
+<label><input type="radio" name="q4"> Não precisa de chave</label>
+<label><input type="radio" name="q4"> Abre mais portas</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-J lab@servidor;;outre:^salto ok$">
+<p class="try-task"><strong>Missão:</strong> pule pelo servidor até o IP dele mesmo (dá para treinar o <code>-J</code> com uma máquina só; troque pelo IP do seu servidor).</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -J lab@servidor lab@192.168.0.20 'echo salto ok'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+salto ok
+</pre>
+</div><div class="trycmd" data-goal="src:ssh -G interno;;outre:^proxyjump \S+$">
+<p class="try-task"><strong>Missão:</strong> depois de criar o bloco <code>Host interno</code> com <code>ProxyJump</code>, confira com <code>ssh -G</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -G interno | grep -i '^proxyjump'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+proxyjump servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>O <code>-J</code> autentica no destino a partir do notebook.</li>
+<li>Funciona com scp, sftp e rsync.</li>
+<li>Prefira <code>-J</code> a <code>-A</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

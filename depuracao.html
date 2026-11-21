@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depurar o SSH com ssh -v: lendo os passos da conexão | Guia SSH</title>
+<meta name="description" content="Usar ssh -v para ver cada passo da conexão: rede, chave do servidor, chaves oferecidas e autenticação; e ssh -G para a configuração.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Depurando com <span class="hl">-v</span></h1>
+
+<p class="intro">O -v transforma um erro misterioso numa lista de passos. Esta aula ensina a ler.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Ler as linhas do <code>ssh -v</code>.</li>
+<li>Filtrar com <code>2&gt;&amp;1 | grep</code>.</li>
+<li>Saber onde a conexão parou.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>O ssh fala o que está fazendo</h2>
+<p>Quando algo dá errado e a mensagem final não ajuda, rode o mesmo comando com <code>-v</code> (de <em>verbose</em>). Cada linha que começa com <code>debug1:</code> é um passo da conexão. <code>-vv</code> e <code>-vvv</code> mostram ainda mais.</p>
+<p>A saída completa tem dezenas de linhas, e as mensagens do <code>-v</code> saem pela saída de erro. Por isso o <code>2&gt;&amp;1</code> antes do <code>grep</code>:</p>
+<hr>
+<h2>1. Uma conexão que deu certo</h2>
+<pre class="term" data-cwd="~">$ ssh -v lab@servidor true 2&gt;&amp;1 | grep -E 'Connecting to|Connection established|Authenticating to|is known and matches|Authentications that|Offering|accepts key|Authenticated to'
+debug1: Connecting to servidor [192.168.0.20] port 22.   « 1. achou o IP e a porta
+debug1: Connection established.
+debug1: Authenticating to servidor:22 as 'lab'
+debug1: Host 'servidor' is known and matches the ED25519 host key.   « 2. a chave do servidor confere
+debug1: Authentications that can continue: publickey,password   « 3. o que o servidor aceita
+debug1: Offering public key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU   « 4. o notebook oferece a chave
+debug1: Server accepts key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU
+Authenticated to servidor ([192.168.0.20]:22) using &quot;publickey&quot;.   « 5. entrou
+$</pre>
+<p>Leia sempre nessa ordem: <strong>rede</strong> (conectou?), <strong>servidor</strong> (a chave dele confere?), <strong>você</strong> (que chaves ofereceu, e qual foi aceita?).</p>
+<hr>
+<h2>2. Uma conexão que não deu</h2>
+<p>Aqui a chave do notebook não está no <code>authorized_keys</code> do servidor:</p>
+<pre class="term" data-cwd="~">$ ssh -v -o BatchMode=yes lab@servidor true 2&gt;&amp;1 | grep -E 'Authentications that|Offering|Trying private key|Permission denied'
+debug1: Authentications that can continue: publickey,password
+debug1: Trying private key: /home/ana/.ssh/id_rsa
+debug1: Trying private key: /home/ana/.ssh/id_ecdsa
+debug1: Trying private key: /home/ana/.ssh/id_ecdsa_sk
+debug1: Offering public key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU   « a chave foi oferecida...
+debug1: Authentications that can continue: publickey,password
+debug1: Trying private key: /home/ana/.ssh/id_ed25519_sk
+debug1: Trying private key: /home/ana/.ssh/id_xmss
+lab@servidor: Permission denied (publickey,password).   « ...mas o servidor não a conhece
+$</pre>
+<p>O servidor recusou a chave oferecida e só sobrou a senha. A conclusão: o problema é o <code>authorized_keys</code> do servidor, não a rede.</p>
+<hr>
+<h2>3. O que o ssh vai fazer, sem conectar</h2>
+<p>O <code>ssh -G</code> (do Nível 3) mostra a configuração calculada: útil quando a dúvida é o <code>~/.ssh/config</code>.</p>
+<pre class="term" data-cwd="~">$ ssh -G interno | grep -E '^(hostname|user|port|proxyjump|identityfile) '
+user lab
+hostname 192.168.0.130
+port 22
+identityfile ~/.ssh/id_rsa
+identityfile ~/.ssh/id_ecdsa
+identityfile ~/.ssh/id_ecdsa_sk
+identityfile ~/.ssh/id_ed25519
+identityfile ~/.ssh/id_ed25519_sk
+identityfile ~/.ssh/id_xmss
+proxyjump servidor
+$</pre>
+<div class="note"><strong>Do lado do servidor</strong><p>Quem tem acesso ao servidor pode olhar o log (<a href="sshd-logs.html">aula dos logs</a>), que às vezes diz o motivo exato, como <code>bad ownership or modes</code>. Em último caso, <code>sudo /usr/sbin/sshd -d -p 2222</code> sobe um sshd de teste que atende uma conexão na porta 2222 e explica tudo na tela.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Parou no passo 2</strong>
+<p>Num notebook que ainda não conhece o servidor, com <code>BatchMode=yes</code> (sem perguntas), o <code>-v</code> mostra que a conexão nem chegou à sua chave:</p>
+<pre class="term" data-cwd="~">$ ssh -v -o BatchMode=yes lab@servidor true 2&gt;&amp;1 | grep -E 'Connection established|Server host key|host key is known|verification failed'
+debug1: Connection established.
+debug1: Server host key: ssh-ed25519 SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE
+Host key verification failed.
+$</pre>
+<p>A rede está boa (passo 1), mas a chave do servidor não pôde ser conferida (passo 2). Veja a aula de <a href='erros-host.html'>erros de host</a>. Lembre: sem o <code>2&gt;&amp;1</code>, as linhas do <code>-v</code> passam direto pelo <code>grep</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -v / -vv / -vvv</code></td><td>cada vez mais detalhe.</td></tr>
+<tr><td><code>2&gt;&amp;1 | grep</code></td><td>filtra o -v.</td></tr>
+<tr><td><code>ssh -G host</code></td><td>configuração calculada.</td></tr>
+<tr><td><code>sshd -d -p 2222</code></td><td>servidor de teste.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Mais detalhes</h3><p>Que opção mostra os passos da conexão?</p><div class="ex-code">ssh <input data-answer="-v" aria-label="opção"> lab@servidor</div></div><div class="exercise"><h3>2. Para o grep</h3><p>Complete para mandar as mensagens do -v para o grep:</p><div class="ex-code">ssh -v lab@servidor true <input data-answer="2&gt;&amp;1" aria-label="resposta"> | grep Offering</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Aparece <code>Offering public key</code> e depois <code>Permission denied</code>. O problema provável é:</p>
+<label><input type="radio" name="q3"> a rede</label>
+<label><input type="radio" name="q3"> a chave não está no authorized_keys do servidor</label>
+<label><input type="radio" name="q3"> o DNS</label>
+<label><input type="radio" name="q3"> o known_hosts</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Para ver a configuração calculada sem conectar:</p>
+<label><input type="radio" name="q4"> <code>ssh -v</code></label>
+<label><input type="radio" name="q4"> <code>ssh -G</code></label>
+<label><input type="radio" name="q4"> <code>ssh -T</code></label>
+<label><input type="radio" name="q4"> <code>ssh -N</code></label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-v;;src:2&gt;&amp;1;;outre:^Authenticated to .* using .publickey.\.$">
+<p class="try-task"><strong>Missão:</strong> conecte com <code>-v</code> e mostre só a linha que diz como você entrou.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -v lab@servidor true 2&gt;&amp;1 | grep 'Authenticated to'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Authenticated to servidor ([192.168.0.20]:22) using &quot;publickey&quot;.
+</pre>
+</div><div class="trycmd" data-goal="src:-v;;outre:^debug1: Offering public key: \S+ ED25519 SHA256:">
+<p class="try-task"><strong>Missão:</strong> conecte com <code>-v</code> e mostre que chave o notebook ofereceu.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -v lab@servidor true 2&gt;&amp;1 | grep 'Offering public key'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+debug1: Offering public key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Rede, servidor, você: nessa ordem.</li>
+<li>O -v sai pela saída de erro.</li>
+<li>O log do servidor completa a história.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

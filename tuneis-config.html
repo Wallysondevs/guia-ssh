@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Túneis no ~/.ssh/config: LocalForward e ExitOnForwardFailure | Guia SSH</title>
+<meta name="description" content="Guardar túneis no ~/.ssh/config com LocalForward, RemoteForward e DynamicForward, ExitOnForwardFailure, e ver e fechar túneis em segundo plano.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Túneis no <span class="hl">config</span></h1>
+
+<p class="intro">Túnel de todo dia vira um apelido. Esta aula mostra como abrir, listar e fechar.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Escrever <code>LocalForward</code> no config.</li>
+<li>Ver e fechar túneis com <code>pgrep</code> e <code>pkill</code>.</li>
+<li>Usar <code>ExitOnForwardFailure</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: túneis com nome</h2>
+<p>Túnel que você usa todo dia merece um bloco no config. As opções equivalentes: <code>LocalForward</code> (<code>-L</code>), <code>RemoteForward</code> (<code>-R</code>) e <code>DynamicForward</code> (<code>-D</code>). E o <code>ExitOnForwardFailure yes</code> faz o ssh <strong>desistir</strong> se não conseguir abrir o túnel, em vez de ficar conectado sem ele.</p>
+<pre class="cmd">
+Host painel
+    HostName 192.168.0.20
+    User lab
+    LocalForward 8080 localhost:8080
+    ExitOnForwardFailure yes
+</pre>
+<hr>
+<h2>1. Abrir pelo apelido</h2>
+<pre class="term" data-cwd="~">$ printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' &gt;&gt; ~/.ssh/config
+$ ssh -f -N painel
+$ curl -s http://localhost:8080/
+&lt;h1&gt;Painel do servidor&lt;/h1&gt;&lt;p&gt;Esta página só abre no próprio servidor (127.0.0.1:8080).&lt;/p&gt;
+$ pgrep -a ssh
+46 ssh -f -N painel   « o processo do túnel
+$</pre>
+<hr>
+<h2>2. Fechar</h2>
+<pre class="term" data-cwd="~">$ printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' &gt;&gt; ~/.ssh/config
+$ ssh -f -N painel
+$ pkill -f 'ssh -f -N painel'
+$ pgrep -a ssh
+$ curl -sS http://localhost:8080/
+curl: (7) Failed to connect to localhost port 8080 after 0 ms: Could not connect to server
+$</pre>
+<hr>
+<h2>3. O ExitOnForwardFailure em ação</h2>
+<p>Com a porta 8080 já ocupada por um túnel, o segundo ssh desiste e devolve erro (código 255), em vez de fingir que deu certo:</p>
+<pre class="term" data-cwd="~">$ printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' &gt;&gt; ~/.ssh/config
+$ ssh -f -N painel
+$ ssh -f -N painel; echo &quot;código: $?&quot;
+bind [127.0.0.1]:8080: Address already in use
+channel_setup_fwd_listener_tcpip: cannot listen to port: 8080
+Could not request local forwarding.
+código: 255   « desistiu: nada de conexão sem túnel
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Túnel aberto e esquecido</strong>
+<p>Túneis com <code>-f</code> ficam abertos até você fechar, mesmo fechando o terminal. Antes de abrir de novo, veja o que já existe:</p>
+<pre class="term" data-cwd="~">$ ssh -f -N -L 8080:localhost:8080 lab@servidor
+$ ssh -f -N -D 1080 lab@servidor
+$ pgrep -a ssh
+46 ssh -f -N -L 8080:localhost:8080 lab@servidor
+48 ssh -f -N -D 1080 lab@servidor
+$</pre>
+<p>Feche o que não usa com <code>kill</code> e o número do processo, ou <code>pkill -f</code> com um pedaço do comando.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>LocalForward 8080 localhost:8080</code></td><td>= -L.</td></tr>
+<tr><td><code>RemoteForward / DynamicForward</code></td><td>= -R / -D.</td></tr>
+<tr><td><code>ExitOnForwardFailure yes</code></td><td>desiste se falhar.</td></tr>
+<tr><td><code>pgrep -a ssh</code></td><td>túneis abertos.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. No config</h3><p>Que opção do config equivale ao <code>-L</code>?</p><div class="ex-code">    <input data-answer="LocalForward" aria-label="opção"> 8080 localhost:8080</div></div><div class="exercise"><h3>2. Desistir</h3><p>Que opção faz o ssh desistir se o túnel falhar?</p><div class="ex-code">    <input data-answer="ExitOnForwardFailure" aria-label="opção"> yes</div></div><div class="mc" data-answer="2"><p class="mc-q">3. <code>pgrep -a ssh</code> serve para:</p>
+<label><input type="radio" name="q3"> abrir túneis</label>
+<label><input type="radio" name="q3"> ver os processos ssh abertos, com o comando</label>
+<label><input type="radio" name="q3"> apagar chaves</label>
+<label><input type="radio" name="q3"> testar a senha</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Sem <code>ExitOnForwardFailure</code>, se a porta estiver ocupada:</p>
+<label><input type="radio" name="q4"> o ssh desiste</label>
+<label><input type="radio" name="q4"> o ssh conecta mesmo sem o túnel</label>
+<label><input type="radio" name="q4"> o ssh troca a porta</label>
+<label><input type="radio" name="q4"> o servidor cai</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh -f -N -L;;src:pgrep -a ssh;;outre:^\d+ ssh -f -N -L 8080">
+<p class="try-task"><strong>Missão:</strong> abra um túnel em segundo plano e mostre o processo dele.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -f -N -L 8080:localhost:8080 lab@servidor &amp;&amp; pgrep -a ssh
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+46 ssh -f -N -L 8080:localhost:8080 lab@servidor
+</pre>
+</div><div class="trycmd" data-goal="src:ExitOnForwardFailure=yes;;out:Address already in use">
+<p class="try-task"><strong>Missão:</strong> tente abrir um túnel na porta 3000 do notebook (já usada pelo seu site) com <code>ExitOnForwardFailure</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o ExitOnForwardFailure=yes -f -N -L 3000:localhost:8080 lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+bind [127.0.0.1]:3000: Address already in use
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Túnel com nome: <code>ssh -f -N apelido</code>.</li>
+<li><code>ExitOnForwardFailure</code> evita conexão sem túnel.</li>
+<li>Feche o que não usa.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

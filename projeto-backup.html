@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto SSH: backup com rsync e um script | Guia SSH</title>
+<meta name="description" content="Projeto final: backup de uma pasta com rsync pelo SSH, atualização só do que mudou, recuperação de arquivo e um script para o cron.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto: <span class="hl">backup</span></h1>
+
+<p class="intro">Um backup de verdade, com o rsync, o config e um script de duas linhas.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Fazer e atualizar um backup.</li>
+<li>Recuperar um arquivo.</li>
+<li>Guardar num script.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>O projeto</h2>
+<p>Guardar a pasta <code>projeto</code> do notebook no servidor, atualizar só o que mudou, recuperar um arquivo apagado e deixar tudo num script. Usa o apelido <code>servidor</code> do <code>~/.ssh/config</code> e o <a href="rsync.html">rsync</a>.</p>
+<hr>
+<h2>1. A primeira cópia</h2>
+<pre class="term" data-cwd="~">$ rsync -a projeto/ servidor:backup/
+$ ssh servidor 'ls -R backup'
+backup:
+estilo.css
+img
+index.html
+README.md
+
+backup/img:
+logo.png
+$</pre>
+<hr>
+<h2>2. Só o que mudou</h2>
+<pre class="term" data-cwd="~">$ echo '&lt;!-- versão 2 --&gt;' &gt;&gt; projeto/index.html
+$ rsync -av projeto/ servidor:backup/
+sending incremental file list
+index.html   « só este arquivo viajou
+
+sent 263 bytes  received 42 bytes  610,00 bytes/sec
+total size is 2.137  speedup is 7,01
+$</pre>
+<hr>
+<h2>3. Recuperando um arquivo</h2>
+<pre class="term" data-cwd="~">$ rm projeto/estilo.css
+$ rsync -av servidor:backup/estilo.css projeto/
+receiving incremental file list
+estilo.css   « voltou do servidor
+
+sent 43 bytes  received 129 bytes  344,00 bytes/sec
+total size is 22  speedup is 0,13
+$ ls projeto
+estilo.css  img  index.html  README.md
+$</pre>
+<hr>
+<h2>4. Um script</h2>
+<pre class="term" data-cwd="~">$ printf '#!/bin/sh\nrsync -a --delete ~/projeto/ servidor:backup/ &amp;&amp; echo backup ok\n' &gt; backup.sh
+$ chmod +x backup.sh
+$ ./backup.sh
+backup ok   « o script rodou
+$ cat backup.sh
+#!/bin/sh
+rsync -a --delete ~/projeto/ servidor:backup/ &amp;&amp; echo backup ok
+$</pre>
+<p>Para rodar sozinho todo dia às 20h, o <code>crontab -e</code> recebe uma linha como <code>0 20 * * * $HOME/backup.sh</code>. Como a chave não pede nada (ou o agente está carregado), o cron consegue conectar.</p>
+<div class="warning"><strong>--delete</strong><p>Com <code>--delete</code>, o que você apagar no notebook some também do backup na próxima vez. Para guardar versões, use uma pasta por dia, como <code>backup/$(date +%F)/</code>.</p></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Esqueceu a barra</strong>
+<p>Sem a barra no fim de <code>projeto/</code>, o rsync cria uma pasta <code>projeto</code> dentro do destino, em vez de copiar o que está nela:</p>
+<pre class="term" data-cwd="~">$ rsync -a projeto servidor:backup/
+$ ssh servidor 'ls backup'
+projeto
+$</pre>
+<p>Com a barra, vai o <strong>conteúdo</strong> da pasta; sem ela, a pasta inteira. Use sempre <code>--dry-run</code> na dúvida.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>rsync -a pasta/ srv:destino/</code></td><td>backup.</td></tr>
+<tr><td><code>rsync -av --dry-run</code></td><td>ensaio.</td></tr>
+<tr><td><code>crontab -e</code></td><td>agenda.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. O backup</h3><p>Complete para copiar o conteúdo da pasta:</p><div class="ex-code">rsync -a <input data-answer="projeto/" aria-label="resposta"> servidor:backup/projeto/</div></div><div class="exercise"><h3>2. Ensaiar antes</h3><p>Que opção do rsync mostra o que faria, sem fazer?</p><div class="ex-code">rsync -av <input data-answer="--dry-run" aria-label="opção"> projeto/ servidor:backup/</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Na segunda vez, o rsync envia:</p>
+<label><input type="radio" name="q3"> tudo de novo</label>
+<label><input type="radio" name="q3"> só o que mudou</label>
+<label><input type="radio" name="q3"> nada</label>
+<label><input type="radio" name="q3"> só as pastas</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Para o cron conseguir conectar, a chave:</p>
+<label><input type="radio" name="q4"> precisa de frase, digitada pelo cron</label>
+<label><input type="radio" name="q4"> não pode pedir frase (ou o agente já está carregado)</label>
+<label><input type="radio" name="q4"> tem de ser RSA</label>
+<label><input type="radio" name="q4"> fica no servidor</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:rsync;;out:index.html">
+<p class="try-task"><strong>Missão:</strong> copie a pasta <code>projeto</code> para <code>backup</code> no servidor e liste o que chegou.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+rsync -a projeto/ servidor:backup/ &amp;&amp; ssh servidor ls backup
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+estilo.css
+img
+index.html
+README.md
+</pre>
+</div><div class="trycmd" data-goal="src:--dry-run;;out:(DRY RUN)">
+<p class="try-task"><strong>Missão:</strong> ensaie o backup, sem copiar nada.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+rsync -av --dry-run projeto/ servidor:backup/
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+sending incremental file list
+created directory backup
+./
+README.md
+estilo.css
+index.html
+img/
+img/logo.png
+
+sent 193 bytes  received 64 bytes  514,00 bytes/sec
+total size is 2.118  speedup is 8,24 (DRY RUN)
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>A barra no fim importa.</li>
+<li><code>--delete</code> espelha, cuidado.</li>
+<li>O cron precisa de uma chave que não pergunte.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

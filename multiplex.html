@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ControlMaster: reaproveitando a conexão SSH | Guia SSH</title>
+<meta name="description" content="Usar ControlMaster, ControlPath e ControlPersist para reaproveitar uma conexão SSH, e controlar a mestre com ssh -O check e -O exit.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Conexões <span class="hl">reaproveitadas</span></h1>
+
+<p class="intro">Uma conexão mestre aberta deixa as próximas conexões instantâneas. Esta aula mostra como ligar e controlar.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Ligar o ControlMaster no config.</li>
+<li>Ver a diferença de tempo.</li>
+<li>Conferir e fechar a mestre com <code>-O</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: uma conexão, muitas sessões</h2>
+<p>Cada <code>ssh</code> faz a negociação de criptografia e a autenticação do zero. Com <strong>ControlMaster</strong>, a primeira conexão vira uma “mestre” que fica aberta, e as próximas passam por dentro dela, sem negociar de novo. Fica bem mais rápido, ótimo para scripts que rodam vários comandos seguidos.</p>
+<hr>
+<h2>1. Ligar no config</h2>
+<pre class="cmd">
+Host servidor
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlPersist 10m
+</pre>
+<dl class="anatomy"><dt>ControlMaster auto</dt><dd>usa uma mestre se existir; se não, cria.</dd><dt>ControlPath</dt><dd>onde fica o “soquete” da mestre (<code>%r</code> usuário, <code>%h</code> host, <code>%p</code> porta).</dd><dt>ControlPersist 10m</dt><dd>mantém a mestre aberta 10 minutos depois da última sessão.</dd></dl>
+<p>Na coleta, a Ana pôs o bloco no começo do config (lembre: o primeiro valor vence) e mediu o tempo de duas conexões:</p>
+<pre class="term" data-cwd="~">$ printf 'Host servidor\n    ControlMaster auto\n    ControlPath ~/.ssh/cm-%%r@%%h:%%p\n    ControlPersist 10m\n' | cat - ~/.ssh/config &gt; /tmp/config.novo &amp;&amp; mv /tmp/config.novo ~/.ssh/config
+$ time ssh servidor true
+
+real	0m0,090s
+user	0m0,007s
+sys	0m0,004s
+$ time ssh servidor true
+
+real	0m0,010s
+user	0m0,000s
+sys	0m0,007s
+$</pre>
+<p>A segunda foi mais rápida: já havia uma mestre aberta. Os números exatos variam; numa rede de verdade, com o servidor longe, a diferença é bem maior.</p>
+<hr>
+<h2>2. Controlar a mestre: <code>-O</code></h2>
+<pre class="term" data-cwd="~">$ printf 'Host servidor\n    ControlMaster auto\n    ControlPath ~/.ssh/cm-%%r@%%h:%%p\n    ControlPersist 10m\n' | cat - ~/.ssh/config &gt; /tmp/config.novo &amp;&amp; mv /tmp/config.novo ~/.ssh/config
+$ ssh servidor true
+$ ls ~/.ssh
+cm-lab@192.168.0.20:22	config	id_ed25519  id_ed25519.pub  known_hosts   « o soquete da mestre
+$ ssh -O check servidor
+Master running (pid=51)   « a mestre está aberta
+$ ssh -O exit servidor
+Exit request sent.   « pedido para fechar
+$ ssh -O check servidor
+Control socket connect(/home/ana/.ssh/cm-lab@192.168.0.20:22): No such file or directory
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Pasta do ControlPath não existe</strong>
+<p>Se o ControlPath apontar para uma pasta que não existe, a mestre não consegue criar o soquete:</p>
+<pre class="term" data-cwd="~">$ ssh -o ControlMaster=auto -o ControlPath='~/.ssh/naoexiste/cm-%r@%h:%p' servidor true
+unix_listener: cannot bind to path /home/ana/.ssh/naoexiste/cm-lab@192.168.0.20:22.gZ8N9MWnCcFQZyMI: No such file or directory
+$</pre>
+<p>Crie a pasta antes (<code>mkdir -p ~/.ssh/naoexiste</code>) ou use um caminho que exista.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ControlMaster auto</code></td><td>liga.</td></tr>
+<tr><td><code>ControlPath ~/.ssh/cm-%r@%h:%p</code></td><td>o soquete.</td></tr>
+<tr><td><code>ControlPersist 10m</code></td><td>tempo aberta.</td></tr>
+<tr><td><code>ssh -O check / exit srv</code></td><td>confere / fecha.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Ligar</h3><p>Que opção do config cria e usa conexões mestre?</p><div class="ex-code">    <input data-answer="ControlMaster" aria-label="opção"> auto</div></div><div class="exercise"><h3>2. Conferir</h3><p>Complete para ver se há uma mestre aberta:</p><div class="ex-code">ssh -O <input data-answer="check" aria-label="comando"> servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. O ganho do ControlMaster é:</p>
+<label><input type="radio" name="q3"> criptografia mais forte</label>
+<label><input type="radio" name="q3"> conexões seguintes sem negociar de novo, mais rápidas</label>
+<label><input type="radio" name="q3"> não precisar de chave</label>
+<label><input type="radio" name="q3"> abrir portas</label></div><div class="mc" data-answer="2"><p class="mc-q">4. <code>ControlPersist 10m</code> quer dizer:</p>
+<label><input type="radio" name="q4"> a conexão cai em 10 minutos</label>
+<label><input type="radio" name="q4"> a mestre fica aberta 10 minutos depois da última sessão</label>
+<label><input type="radio" name="q4"> tenta conectar por 10 minutos</label>
+<label><input type="radio" name="q4"> nada</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ControlMaster=auto;;src:-O check;;outre:^Master running \(pid=\d+\)$">
+<p class="try-task"><strong>Missão:</strong> abra uma conexão mestre e confira se ela está rodando.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o ControlMaster=auto -o ControlPath='~/.ssh/cm-%r@%h:%p' -o ControlPersist=1m servidor true; ssh -o ControlPath='~/.ssh/cm-%r@%h:%p' -O check servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Master running (pid=48)
+</pre>
+</div><div class="trycmd" data-goal="src:-O exit;;out:Exit request sent.">
+<p class="try-task"><strong>Missão:</strong> abra uma conexão mestre e feche-a com <code>-O exit</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -o ControlMaster=auto -o ControlPath='~/.ssh/cm-%r@%h:%p' -o ControlPersist=1m servidor true; ssh -o ControlPath='~/.ssh/cm-%r@%h:%p' -O exit servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Exit request sent.
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>A mestre evita negociar de novo.</li>
+<li>O ControlPath precisa de uma pasta que exista.</li>
+<li><code>-O exit</code> fecha a mestre.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

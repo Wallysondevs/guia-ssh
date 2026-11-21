@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trabalhando numa sessão SSH: prompt, sudo e escapes (~. e ~?) | Guia SSH</title>
+<meta name="description" content="Como trabalhar numa sessão SSH: ler o prompt, usar sudo no servidor e as teclas de escape do ssh, como ~. para derrubar uma conexão travada.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Trabalhando no <span class="hl">servidor</span></h1>
+
+<p class="intro">Dentro da sessão, tudo roda no servidor. Esta aula ensina a não se perder e a sair de uma conexão travada.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Ler o prompt para saber onde está.</li>
+<li>Usar <code>sudo</code> no servidor.</li>
+<li>Os escapes <code>~?</code> e <code>~.</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: trabalhar lá dentro</h2>
+<p>Numa sessão SSH, o prompt avisa onde você está: <code>ana@notebook</code> é o seu computador; <code>lab@servidor</code> é o servidor. Parece óbvio, mas apagar arquivos no computador errado é o erro mais comum de quem começa. <strong>Olhe o prompt antes de cada comando importante.</strong></p>
+<hr>
+<h2>1. Uma sessão de trabalho</h2>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ pwd
+/home/lab
+lab@servidor:~$ ls -l
+total 8
+-rw-r--r-- 1 lab lab   47 nov 21 12:00 relatorio.txt
+drwxr-xr-x 2 lab lab 4096 nov 21 12:00 site
+lab@servidor:~$ cat relatorio.txt
+Relatório mensal
+vendas: 42
+clientes novos: 7
+lab@servidor:~$ sudo whoami   « o sudo no servidor vale para o servidor
+root
+lab@servidor:~$ exit
+sair
+Connection to servidor closed.
+$</pre>
+<p>Comandos de administração, como <code>sudo apt update</code>, funcionam igual: rodam no servidor, com os privilégios do usuário <code>lab</code> de lá.</p>
+<hr>
+<h2>2. As teclas de escape do ssh: <code>~?</code> e <code>~.</code></h2>
+<p>O cliente ssh tem atalhos próprios, que começam com <code>~</code> logo depois de um Enter. O <code>~?</code> mostra a lista:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ 
+lab@servidor:~$ ~?
+Supported escape sequences:
+ ~.   - terminate connection (and any multiplexed sessions)   « derruba a conexão na hora
+ ~B   - send a BREAK to the remote system
+ ~R   - request rekey
+ ~V/v - decrease/increase verbosity (LogLevel)
+ ~^Z  - suspend ssh
+ ~#   - list forwarded connections
+ ~&amp;   - background ssh (when waiting for connections to terminate)
+ ~?   - this message
+ ~~   - send the escape character by typing it twice
+(Note that escapes are only recognized immediately after newline.)
+exit
+sair
+Connection to servidor closed.
+$</pre>
+<p>O mais útil é o <code>~.</code>: quando a rede cai e a sessão congela, ele <strong>fecha a conexão travada</strong> sem você ter de fechar o terminal:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ 
+lab@servidor:~$ Connection to servidor closed.   « o ssh fechou a conexão
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>O programa não existe no servidor</strong>
+<p>Cada computador tem os seus programas. O <code>htop</code> existe no notebook? Não importa: o comando roda no servidor, e lá ele não foi instalado:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor htop
+bash: linha 1: htop: comando não encontrado
+$</pre>
+<p>A mensagem vem do Bash do <strong>servidor</strong> (“linha 1” é a do comando que o ssh mandou). Instale lá com <code>sudo apt install htop</code>, ou use outro comando.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>Enter ~.</code></td><td>derruba a conexão.</td></tr>
+<tr><td><code>Enter ~?</code></td><td>lista os escapes.</td></tr>
+<tr><td><code>exit</code></td><td>sai normalmente.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Onde estou?</h3><p>No prompt <code>lab@servidor:~$</code>, qual é o computador?</p><div class="ex-code"><input data-answer="servidor" aria-label="resposta"></div></div><div class="exercise"><h3>2. Conexão travada</h3><p>Que escape do ssh derruba uma conexão congelada (depois de um Enter)?</p><div class="ex-code"><input data-answer="~." aria-label="resposta"></div></div><div class="mc" data-answer="2"><p class="mc-q">3. Na sessão, <code>sudo apt update</code> atualiza:</p>
+<label><input type="radio" name="q3"> o notebook</label>
+<label><input type="radio" name="q3"> o servidor</label>
+<label><input type="radio" name="q3"> os dois</label>
+<label><input type="radio" name="q3"> nenhum</label></div><div class="mc" data-answer="1"><p class="mc-q">4. O <code>~?</code> só funciona:</p>
+<label><input type="radio" name="q4"> no começo de uma linha (logo depois de um Enter)</label>
+<label><input type="radio" name="q4"> no fim da linha</label>
+<label><input type="radio" name="q4"> dentro do nano</label>
+<label><input type="radio" name="q4"> com sudo</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:^ssh\b;;outre:^\S+@\S+:~\$ pwd$;;outre:^Connection to \S+ closed\.$">
+<p class="try-task"><strong>Missão:</strong> entre no servidor, rode <code>pwd</code> e saia com <code>exit</code>. Cole a sessão inteira.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+
+Servidor de laboratório do Guia SSH. Tudo aqui é de teste.
+
+lab@servidor:~$ pwd
+/home/lab
+lab@servidor:~$ exit
+sair
+Connection to servidor closed.
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh\b;;src:sudo whoami;;outre:^root$">
+<p class="try-task"><strong>Missão:</strong> rode <code>sudo whoami</code> no servidor sem abrir uma sessão.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -t lab@servidor 'sudo whoami'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+root
+Connection to servidor closed.
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Olhe o prompt antes de cada comando importante.</li>
+<li><code>~.</code> fecha uma conexão congelada.</li>
+<li>Cada computador tem os seus programas.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

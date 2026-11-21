@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passphrase: a frase secreta da chave SSH (ssh-keygen -p e -y) | Guia SSH</title>
+<meta name="description" content="Para que serve a passphrase da chave SSH, como trocá-la com ssh-keygen -p e como recriar a chave pública com ssh-keygen -y.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>A <span class="hl">frase secreta</span> da chave</h1>
+
+<p class="intro">A frase secreta protege a chave privada no disco. Esta aula mostra como usar, trocar e o que fazer se errar.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Entrar com uma chave que tem frase.</li>
+<li>Pôr, trocar ou tirar a frase com <code>-p</code>.</li>
+<li>Recriar o <code>.pub</code> com <code>-y</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: uma senha para a chave</h2>
+<p>A frase secreta (<em>passphrase</em>) <strong>criptografa a chave privada</strong> no disco. Se o notebook for roubado, ou alguém copiar o arquivo, a chave não serve sem a frase. Ela nunca vai para o servidor: é conferida no próprio notebook.</p>
+<hr>
+<h2>1. Entrar com uma chave que tem frase</h2>
+<p>Com frase, o ssh pede a frase da <strong>chave</strong> (repare na pergunta: não é a senha do servidor):</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor hostname
+Enter passphrase for key '/home/ana/.ssh/id_ed25519':    « a frase da chave, conferida no notebook
+servidor
+$</pre>
+<p>Digitar a frase a cada conexão cansa. A solução é o <a href="ssh-agent.html">ssh-agent</a>, na próxima aula.</p>
+<hr>
+<h2>2. Pôr, trocar ou tirar a frase: <code>ssh-keygen -p</code></h2>
+<p>O <code>-p</code> pede a frase antiga e a nova (duas vezes). A chave continua a mesma, então nada muda nos servidores:</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -p -f ~/.ssh/id_ed25519
+Enter old passphrase: 
+Key has comment 'ana@notebook'
+Enter new passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved with the new passphrase.   « trocada
+$ ssh-keygen -lf ~/.ssh/id_ed25519.pub
+256 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU ana@notebook (ED25519)   « a impressão digital não mudou
+$</pre>
+<hr>
+<h2>3. Perdi o .pub: <code>ssh-keygen -y</code></h2>
+<p>A chave pública sai da privada. Se o <code>.pub</code> sumiu, o <code>-y</code> recria (pedindo a frase):</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -y -f ~/.ssh/id_ed25519
+Enter passphrase for &quot;/home/ana/.ssh/id_ed25519&quot;: 
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhUpv1BK1coguxPjJIpUIlNaF5MdZXnkYskI28ZKD0p ana@notebook
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Frase errada</strong>
+<p>Errou a frase? O ssh-keygen avisa que não conseguiu abrir a chave:</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -y -f ~/.ssh/id_ed25519
+Enter passphrase for &quot;/home/ana/.ssh/id_ed25519&quot;: 
+Load key &quot;/home/ana/.ssh/id_ed25519&quot;: incorrect passphrase supplied to decrypt private key
+$</pre>
+<p>Esqueceu a frase de vez? Não há como recuperar: gere uma chave nova e instale nos servidores.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh-keygen -p -f chave</code></td><td>troca a frase.</td></tr>
+<tr><td><code>ssh-keygen -y -f chave</code></td><td>mostra a pública.</td></tr>
+<tr><td><code>-P antiga -N nova</code></td><td>sem perguntas.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Trocar a frase</h3><p>Complete para trocar a frase da chave:</p><div class="ex-code">ssh-keygen <input data-answer="-p" aria-label="opção"> -f ~/.ssh/id_ed25519</div></div><div class="exercise"><h3>2. Recriar a pública</h3><p>Complete para mostrar a chave pública a partir da privada:</p><div class="ex-code">ssh-keygen <input data-answer="-y" aria-label="opção"> -f ~/.ssh/id_ed25519</div></div><div class="mc" data-answer="2"><p class="mc-q">3. A frase secreta da chave é conferida:</p>
+<label><input type="radio" name="q3"> no servidor</label>
+<label><input type="radio" name="q3"> no notebook</label>
+<label><input type="radio" name="q3"> no GitHub</label>
+<label><input type="radio" name="q3"> no known_hosts</label></div><div class="mc" data-answer="2"><p class="mc-q">4. Trocar a frase com <code>ssh-keygen -p</code>:</p>
+<label><input type="radio" name="q4"> exige reinstalar a chave nos servidores</label>
+<label><input type="radio" name="q4"> mantém a mesma chave (nada muda nos servidores)</label>
+<label><input type="radio" name="q4"> apaga a chave pública</label>
+<label><input type="radio" name="q4"> muda o fingerprint</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh-keygen -p;;src:teste_ed25519;;out:saved with the new passphrase">
+<p class="try-task"><strong>Missão:</strong> ponha a frase <code>nova frase</code> na chave de teste <code>teste_ed25519</code> (que não tem frase).</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -p -f ~/.ssh/teste_ed25519 -P '' -N 'nova frase'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+Key has comment 'teste'
+Your identification has been saved with the new passphrase.
+</pre>
+</div><div class="trycmd" data-goal="src:ssh-keygen -y;;outre:^ssh-ed25519 AAAA\S+">
+<p class="try-task"><strong>Missão:</strong> mostre a chave pública da <code>teste_ed25519</code> a partir da privada, informando a frase.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -y -f ~/.ssh/teste_ed25519 -P 'nova frase'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAqt1yDVXXQWT5pgtl6YeSvJADmIu+q5j7KEhWWRslOs teste
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>A frase é conferida no notebook.</li>
+<li>Trocar a frase não muda a chave.</li>
+<li>Frase esquecida não se recupera.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

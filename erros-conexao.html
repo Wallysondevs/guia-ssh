@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connection refused, timed out e Could not resolve hostname no SSH | Guia SSH</title>
+<meta name="description" content="Erros de rede do SSH: Could not resolve hostname, Connection refused, Connection timed out e No route to host, com ConnectTimeout.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Erros de <span class="hl">conexão</span></h1>
+
+<p class="intro">Antes da chave e da senha, a conexão precisa chegar. A mensagem diz onde parou.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Diferenciar os erros de rede.</li>
+<li>Usar <code>ConnectTimeout</code>.</li>
+<li>Ver se a rede está boa com <code>-v</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>Antes da senha e da chave: a rede</h2>
+<p>Estes erros acontecem antes de qualquer autenticação. A mensagem diz em que passo parou:</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Mensagem</th><th>Onde parou</th></tr>
+<tr><td><code>Could not resolve hostname</code></td><td>o nome não virou IP: erro de digitação ou DNS.</td></tr>
+<tr><td><code>Connection refused</code></td><td>o computador respondeu, mas ninguém atende nessa porta.</td></tr>
+<tr><td><code>Connection timed out</code></td><td>ninguém respondeu: IP errado, firewall descartando ou máquina desligada.</td></tr>
+<tr><td><code>No route to host / Network is unreachable</code></td><td>o notebook não tem caminho até esse IP.</td></tr>
+</table></div>
+<hr>
+<h2>1. Nome errado</h2>
+<pre class="term" data-cwd="~">$ ssh lab@servidr
+ssh: Could not resolve hostname servidr: Temporary failure in name resolution   « o nome não existe
+$</pre>
+<hr>
+<h2>2. Porta errada ou sshd parado</h2>
+<pre class="term" data-cwd="~">$ ssh -p 2222 lab@servidor
+ssh: connect to host servidor port 2222: Connection refused   « nada na porta 2222
+$</pre>
+<p>A mesma mensagem, na porta certa, quando o sshd está parado (na coleta, paramos de propósito):</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor
+ssh: connect to host servidor port 22: Connection refused   « o servidor está lá, o sshd não
+$</pre>
+<p>No servidor: <code>sudo systemctl status ssh</code> e <code>sudo systemctl start ssh</code>.</p>
+<hr>
+<h2>3. Ninguém responde</h2>
+<p>Um IP da rede em que não há máquina nenhuma. O <code>ConnectTimeout</code> evita esperar mais de um minuto:</p>
+<pre class="term" data-cwd="~">$ ssh -o ConnectTimeout=5 lab@192.168.0.50
+ssh: connect to host 192.168.0.50 port 22: No route to host
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Testando só a porta</strong>
+<p>Para saber se a porta abre, sem entrar, o <code>-v</code> com <code>true</code> mostra o primeiro passo. Conectou e deu outro erro depois? Então a rede está boa:</p>
+<pre class="term" data-cwd="~">$ ssh -v -o BatchMode=yes lab@servidor true 2&gt;&amp;1 | grep -E 'Connecting to|Connection established|Permission denied'
+debug1: Connecting to servidor [192.168.0.20] port 22.
+debug1: Connection established.
+lab@servidor: Permission denied (publickey).
+$</pre>
+<p>Aqui a conexão foi estabelecida: o problema não é a rede, é a chave.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>Could not resolve hostname</code></td><td>nome.</td></tr>
+<tr><td><code>Connection refused</code></td><td>porta fechada.</td></tr>
+<tr><td><code>timed out / No route to host</code></td><td>ninguém responde.</td></tr>
+<tr><td><code>-o ConnectTimeout=5</code></td><td>desiste rápido.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Sem esperar demais</h3><p>Complete para desistir depois de 5 segundos:</p><div class="ex-code">ssh -o <input data-answer="ConnectTimeout=5" aria-label="opção"> lab@servidor</div></div><div class="exercise"><h3>2. Outra porta</h3><p>Complete para conectar na porta 2222:</p><div class="ex-code">ssh <input data-answer="-p 2222" aria-label="resposta"> lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. <code>Connection refused</code> quer dizer:</p>
+<label><input type="radio" name="q3"> senha errada</label>
+<label><input type="radio" name="q3"> o computador respondeu, mas nada escuta na porta</label>
+<label><input type="radio" name="q3"> o nome não existe</label>
+<label><input type="radio" name="q3"> a chave mudou</label></div><div class="mc" data-answer="1"><p class="mc-q">4. <code>Could not resolve hostname</code>: o que conferir primeiro?</p>
+<label><input type="radio" name="q4"> a digitação do nome</label>
+<label><input type="radio" name="q4"> as permissões da chave</label>
+<label><input type="radio" name="q4"> o authorized_keys</label>
+<label><input type="radio" name="q4"> o fail2ban</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:-p 2222;;out:Connection refused">
+<p class="try-task"><strong>Missão:</strong> tente conectar numa porta em que nada escuta.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -p 2222 lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+ssh: connect to host servidor port 2222: Connection refused
+</pre>
+</div><div class="trycmd" data-goal="src:servidr;;out:Could not resolve hostname">
+<p class="try-task"><strong>Missão:</strong> erre o nome do servidor de propósito.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidr
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+ssh: Could not resolve hostname servidr: Temporary failure in name resolution
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Leia a mensagem: ela diz o passo.</li>
+<li><code>Connection refused</code>: sshd parado ou porta errada.</li>
+<li>Conectou e falhou depois? Não é a rede.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

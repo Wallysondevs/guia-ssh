@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Várias chaves SSH: -i, IdentitiesOnly e Too many authentication failures | Guia SSH</title>
+<meta name="description" content="Usar várias chaves SSH: escolher com -i, ver a ordem com -v e resolver o Too many authentication failures com IdentitiesOnly.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Várias <span class="hl">chaves</span></h1>
+
+<p class="intro">Com mais de uma chave, é preciso dizer ao ssh qual usar. Esta aula mostra como, e o erro clássico de quem tem chaves demais.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Escolher a chave com <code>-i</code>.</li>
+<li>Ver a ordem das tentativas com <code>-v</code>.</li>
+<li>Usar <code>IdentitiesOnly</code>.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: uma chave para cada lugar</h2>
+<p>Muita gente tem várias chaves: uma do trabalho, uma do GitHub, uma do servidor de casa. O ssh tenta, em ordem, as chaves do agente e as chaves padrão (<code>id_ed25519</code>, <code>id_rsa</code>…). Para uma chave com outro nome, diga qual com <code>-i</code>.</p>
+<hr>
+<h2>1. Escolher a chave: <code>-i</code></h2>
+<p>No servidor, desta vez, só a chave <code>servidor_lab</code> está instalada. A padrão não entra; com <code>-i</code>, entra:</p>
+<pre class="term" data-cwd="~">$ ssh -o BatchMode=yes lab@servidor hostname
+lab@servidor: Permission denied (publickey,password).   « a chave padrão não está no servidor
+$ ssh -i ~/.ssh/servidor_lab lab@servidor hostname
+servidor
+$</pre>
+<p>(Na coleta, a cópia da chave para o servidor foi feita antes, por fora.)</p>
+<pre class="term" data-cwd="~">$ ssh -v -i ~/.ssh/servidor_lab lab@servidor true 2&gt;&amp;1 | grep -E 'Will attempt key|Server accepts key'
+debug1: Will attempt key: /home/ana/.ssh/servidor_lab ED25519 SHA256:6IhHnMXZlsA+WrffV2FLfHtjofkajESu1HR/cy11my0 explicit   « a do -i vem primeiro
+debug1: Server accepts key: /home/ana/.ssh/servidor_lab ED25519 SHA256:6IhHnMXZlsA+WrffV2FLfHtjofkajESu1HR/cy11my0 explicit   « o servidor aceitou esta
+$</pre>
+<hr>
+<h2>2. Chaves demais: “Too many authentication failures”</h2>
+<p>O servidor aceita poucas tentativas por conexão (<code>MaxAuthTries</code>, 6 por padrão). Com muitas chaves no agente, o ssh oferece uma por uma e pode ser expulso antes de chegar à certa:</p>
+<pre class="term" data-cwd="~">$ for i in 1 2 3 4 5 6; do ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/k$i; done
+$ eval &quot;$(ssh-agent -s)&quot; &gt;/dev/null &amp;&amp; ssh-add -q ~/.ssh/k1 ~/.ssh/k2 ~/.ssh/k3 ~/.ssh/k4 ~/.ssh/k5 ~/.ssh/k6
+$ ssh lab@servidor hostname
+Received disconnect from 192.168.0.20 port 22:2: Too many authentication failures   « esgotou as tentativas
+Disconnected from 192.168.0.20 port 22
+$ ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 lab@servidor hostname
+servidor   « com IdentitiesOnly, só a chave certa
+$</pre>
+<dl class="anatomy"><dt>-o IdentitiesOnly=yes</dt><dd>usa só as chaves indicadas com <code>-i</code> (ou no config), não todas as do agente.</dd></dl>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>-i com a chave pública</strong>
+<p>O <code>-i</code> recebe a chave <strong>privada</strong> (sem <code>.pub</code>). Com o <code>.pub</code>, o ssh tenta usá-lo como chave privada, reclama das permissões (um <code>.pub</code> é <code>644</code>) e o ignora:</p>
+<pre class="term" data-cwd="~">$ ssh -o BatchMode=yes -i ~/.ssh/servidor_lab.pub lab@servidor hostname
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Permissions 0644 for '/home/ana/.ssh/servidor_lab.pub' are too open.
+It is required that your private key files are NOT accessible by others.
+This private key will be ignored.
+Load key &quot;/home/ana/.ssh/servidor_lab.pub&quot;: bad permissions
+lab@servidor: Permission denied (publickey,password).
+$</pre>
+<p>Passe o arquivo sem <code>.pub</code>: <code>-i ~/.ssh/servidor_lab</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh -i ~/.ssh/chave srv</code></td><td>usa esta chave.</td></tr>
+<tr><td><code>-o IdentitiesOnly=yes</code></td><td>só as indicadas.</td></tr>
+<tr><td><code>ssh -v … | grep 'Will attempt'</code></td><td>ordem das chaves.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Qual chave</h3><p>Complete para usar a chave <code>servidor_lab</code>:</p><div class="ex-code">ssh <input data-answer="-i" aria-label="opção"> ~/.ssh/servidor_lab lab@servidor</div></div><div class="exercise"><h3>2. Só a indicada</h3><p>Complete a opção que faz o ssh usar só as chaves indicadas:</p><div class="ex-code">ssh -o <input data-answer="IdentitiesOnly=yes" aria-label="resposta"> -i ~/.ssh/id_ed25519 lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">3. O <code>-i</code> recebe:</p>
+<label><input type="radio" name="q3"> a chave pública (.pub)</label>
+<label><input type="radio" name="q3"> a chave privada</label>
+<label><input type="radio" name="q3"> o known_hosts</label>
+<label><input type="radio" name="q3"> a senha</label></div><div class="mc" data-answer="2"><p class="mc-q">4. “Too many authentication failures” costuma acontecer quando:</p>
+<label><input type="radio" name="q4"> a senha está errada</label>
+<label><input type="radio" name="q4"> o agente tem chaves demais e a certa não chega a ser tentada</label>
+<label><input type="radio" name="q4"> o servidor está desligado</label>
+<label><input type="radio" name="q4"> a porta está errada</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:\s-i\s;;outre:^usei a chave certa$">
+<p class="try-task"><strong>Missão:</strong> entre no servidor indicando a chave com <code>-i</code>.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -i ~/.ssh/id_ed25519 lab@servidor 'echo usei a chave certa'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+usei a chave certa
+</pre>
+</div><div class="trycmd" data-goal="src:ssh -v;;src:grep;;outre:^debug1: Server accepts key: ">
+<p class="try-task"><strong>Missão:</strong> mostre com <code>-v</code> qual chave o servidor aceitou.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh -v -i ~/.ssh/id_ed25519 lab@servidor true 2&gt;&amp;1 | grep 'Server accepts key'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+debug1: Server accepts key: /home/ana/.ssh/id_ed25519 ED25519 SHA256:1wgPtPehvxJHxq1qIDo4s7Eu1nZObhihxhAUBwbUHkU explicit
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>-i</code> recebe a privada.</li>
+<li>Chaves demais esgotam as tentativas.</li>
+<li><code>IdentitiesOnly=yes</code> resolve.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>authorized_keys: instalando a chave à mão e limitando o que ela faz | Guia SSH</title>
+<meta name="description" content="Instalar uma chave pública sem ssh-copy-id e limitar o que ela pode fazer com command=, from= e restrict no authorized_keys.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>O <span class="hl">authorized_keys</span></h1>
+
+<p class="intro">O authorized_keys é um arquivo de texto comum. Entendê-lo permite instalar chaves em qualquer lugar e dar a cada uma só o acesso necessário.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Instalar a chave com <code>cat … | ssh … 'cat &gt;&gt;'</code>.</li>
+<li>Limitar uma chave com <code>command=</code> e <code>restrict</code>.</li>
+<li>Entender por que uma chave com <code>from=</code> é recusada.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>A ideia: o authorized_keys é só um arquivo de texto</h2>
+<p>Cada linha do <code>~/.ssh/authorized_keys</code> é uma chave pública que pode entrar como aquele usuário. Onde não há <code>ssh-copy-id</code> (alguns sistemas, o Windows), dá para fazer o mesmo à mão. E dá para pôr <strong>regras</strong> no começo da linha.</p>
+<hr>
+<h2>1. Instalar à mão</h2>
+<p>O <code>cat</code> manda a chave pública pelo cano; no servidor, o <code>cat &gt;&gt;</code> acrescenta no fim do arquivo:</p>
+<pre class="term" data-cwd="~">$ cat ~/.ssh/id_ed25519.pub | ssh lab@servidor 'mkdir -p ~/.ssh &amp;&amp; chmod 700 ~/.ssh &amp;&amp; cat &gt;&gt; ~/.ssh/authorized_keys &amp;&amp; chmod 600 ~/.ssh/authorized_keys'
+lab@servidor's password: 
+$ ssh lab@servidor 'wc -l ~/.ssh/authorized_keys'
+1 /home/lab/.ssh/authorized_keys
+$</pre>
+<div class="warning"><strong>&gt;&gt; e não &gt;</strong><p>Use <code>&gt;&gt;</code> (acrescentar). Um <code>&gt;</code> apagaria as outras chaves do arquivo e trancaria quem entrava com elas.</p></div>
+<hr>
+<h2>2. Regras na frente da chave</h2>
+<p>Antes da chave, opções separadas por vírgula limitam o que ela pode fazer. Com <code>command="…"</code>, a chave <strong>só</strong> roda aquele comando, peça o que pedir. O <code>restrict</code> desliga terminal, túneis e encaminhamentos. É o jeito certo de dar a um script uma chave que só faz uma coisa:</p>
+<p>No servidor, a linha da chave da Ana ganhou uma regra na frente (aqui cortada em 70 letras):</p>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ cut -c1-70 ~/.ssh/authorized_keys
+command=&quot;cat relatorio.txt&quot;,restrict ssh-ed25519 AAAAC3NzaC1lZDI1NTE5A   « a regra na frente da chave
+$</pre>
+<p>Agora, do notebook, peça o que pedir:</p>
+<pre class="term" data-cwd="~">$ ssh lab@servidor hostname
+Relatório mensal
+vendas: 42
+clientes novos: 7
+$ ssh lab@servidor 'rm -rf ~'
+Relatório mensal
+vendas: 42
+clientes novos: 7
+$ ssh lab@servidor
+PTY allocation request failed on channel 0   « restrict: sem terminal
+Relatório mensal
+vendas: 42
+clientes novos: 7
+Connection to servidor closed.
+$</pre>
+<p>Nem o <code>hostname</code> nem o <code>rm -rf ~</code> rodaram: no lugar dele, o servidor rodou o comando da regra e mostrou o relatório.</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Opção</th><th>O que faz</th></tr>
+<tr><td><code>command="cmd"</code></td><td>a chave só roda <code>cmd</code></td></tr>
+<tr><td><code>from="192.168.0.0/24"</code></td><td>só aceita a chave vindo desses IPs</td></tr>
+<tr><td><code>restrict</code></td><td>sem terminal, sem túneis, sem encaminhamento de agente</td></tr>
+<tr><td><code>no-port-forwarding</code></td><td>só proíbe os túneis</td></tr>
+</table></div>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>A regra from= não bate</strong>
+<p>Com <code>from="192.168.0.99"</code>, a chave só vale vindo desse IP. O notebook é o 192.168.0.10, então o servidor ignora a chave. Com <code>BatchMode=yes</code> o ssh não pergunta a senha e desiste:</p>
+<pre class="term" data-cwd="~">$ ssh -o BatchMode=yes lab@servidor hostname
+lab@servidor: Permission denied (publickey,password).
+$</pre>
+<p>Se uma chave “parou de funcionar”, olhe se há regras no começo da linha dela no <code>authorized_keys</code>.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>cat chave.pub | ssh srv 'cat &gt;&gt; ~/.ssh/authorized_keys'</code></td><td>instala à mão.</td></tr>
+<tr><td><code>command=&quot;cmd&quot;,restrict ssh-ed25519 …</code></td><td>chave de um comando só.</td></tr>
+<tr><td><code>from=&quot;IP&quot; ssh-ed25519 …</code></td><td>só desse IP.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Acrescentar</h3><p>Que redirecionamento acrescenta no fim do arquivo, sem apagar?</p><div class="ex-code">cat &gt;<input data-answer="&gt;" aria-label="símbolo"> ~/.ssh/authorized_keys</div></div><div class="exercise"><h3>2. Só um comando</h3><p>Complete a regra que faz a chave rodar só o <code>uptime</code>:</p><div class="ex-code"><input data-answer="command=&quot;uptime&quot;" aria-label="regra"> ssh-ed25519 AAAA…</div></div><div class="mc" data-answer="2"><p class="mc-q">3. Cada linha do authorized_keys é:</p>
+<label><input type="radio" name="q3"> uma senha</label>
+<label><input type="radio" name="q3"> uma chave pública que pode entrar</label>
+<label><input type="radio" name="q3"> um servidor conhecido</label>
+<label><input type="radio" name="q3"> um comando</label></div><div class="mc" data-answer="2"><p class="mc-q">4. O <code>restrict</code> numa chave:</p>
+<label><input type="radio" name="q4"> apaga a chave</label>
+<label><input type="radio" name="q4"> desliga terminal, túneis e encaminhamentos</label>
+<label><input type="radio" name="q4"> obriga a senha</label>
+<label><input type="radio" name="q4"> muda a porta</label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:grep -c;;src:authorized_keys;;outre:^\d+$">
+<p class="try-task"><strong>Missão:</strong> no servidor, conte quantas chaves ed25519 o seu <code>authorized_keys</code> tem. <span class="onde">(rode no <strong>servidor</strong>, como <code>lab</code>)</span></p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+grep -c ssh-ed25519 ~/.ssh/authorized_keys
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+1
+</pre>
+</div><div class="trycmd" data-goal="src:^ssh\b;;src:cut;;outre:^ssh-ed25519 \S+@\S+$">
+<p class="try-task"><strong>Missão:</strong> do notebook, mostre o tipo e o comentário das chaves instaladas no servidor.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh lab@servidor 'cut -d&quot; &quot; -f1,3 ~/.ssh/authorized_keys'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+ssh-ed25519 ana@notebook
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Uma linha = uma chave que pode entrar.</li>
+<li>Use <code>&gt;&gt;</code>, nunca <code>&gt;</code>.</li>
+<li>Regras na frente da chave limitam o que ela faz.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

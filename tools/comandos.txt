@@ -1,0 +1,1161 @@
+# Gerado por tools/gerar.py comandos. Cada '### id' é uma caixa; '#@' traz as opções
+# (estado do laboratório, computador, respostas às perguntas); cada linha, um comando.
+
+### index-prova
+#@ {"estado": "config", "quem": "notebook"}
+ssh servidor hostname
+rsync -a projeto/ servidor:backup/ && ssh servidor ls backup
+ssh interno 'hostname; curl -s http://localhost/'
+
+### intro-prova
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor hostname
+ssh lab@servidor 'whoami; pwd'
+
+### intro-versao
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -V
+
+### intro-sshd
+#@ {"estado": "chave", "quem": "servidor"}
+ps -C sshd -o pid,cmd
+
+### intro-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidr hostname
+
+### intro-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -V
+
+### intro-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'echo conectado em $(hostname)'
+
+### prep-ip-servidor
+#@ {"estado": "chave", "quem": "servidor"}
+hostname
+ip -br addr
+
+### prep-notebook
+#@ {"estado": "zero", "quem": "notebook"}
+hostname
+getent hosts servidor
+ping -c 2 servidor
+ls
+
+### prep-erro
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "kill $(cat /run/sshd.pid)"]]}
+ssh lab@servidor
+
+### prep-m1
+#@ {"estado": "chave", "quem": "notebook"}
+getent hosts servidor
+
+### prep-m2
+#@ {"estado": "chave", "quem": "servidor"}
+ps -C sshd -o cmd
+
+### pc-primeira
+#@ {"estado": "zero", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"], ["password: ", "lab123\n"], ["lab@servidor:[^$#\\n]*[$#] ", "hostname\n"], ["lab@servidor:[^$#\\n]*[$#] ", "whoami\n"], ["lab@servidor:[^$#\\n]*[$#] ", "exit\n"]]}
+ssh lab@servidor
+
+### pc-segunda
+#@ {"estado": "conhecido", "quem": "notebook", "resp": [["password: ", "lab123\n"], ["lab@servidor:[^$#\\n]*[$#] ", "exit\n"]]}
+ssh lab@servidor
+
+### pc-sem-usuario
+#@ {"estado": "conhecido", "quem": "notebook", "resp": [["password: ", "errada1\n"], ["password: ", "errada2\n"]]}
+ssh -o NumberOfPasswordPrompts=2 servidor
+
+### pc-erro
+#@ {"estado": "zero", "quem": "notebook", "resp": [["\\(yes/no", "no\n"]]}
+ssh lab@servidor
+
+### pc-m1
+#@ {"estado": "zero", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"], ["password: ", "lab123\n"]]}
+ssh lab@servidor hostname
+
+### pc-m2
+#@ {"estado": "conhecido", "quem": "notebook", "resp": [["password: ", "lab123\n"]]}
+ssh lab@servidor 'echo Olá do $(hostname)'
+
+### kh-arquivo
+#@ {"estado": "conhecido", "quem": "notebook"}
+ls -l ~/.ssh
+cat ~/.ssh/known_hosts
+
+### kh-procurar
+#@ {"estado": "conhecido", "quem": "notebook"}
+ssh-keygen -F servidor
+
+### kh-servidor
+#@ {"estado": "chave", "quem": "servidor"}
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+
+### kh-keyscan
+#@ {"estado": "zero", "quem": "notebook"}
+ssh-keyscan -t ed25519 servidor
+ssh-keyscan -t ed25519 servidor 2>/dev/null | ssh-keygen -lf -
+
+### kh-remover
+#@ {"estado": "conhecido", "quem": "notebook"}
+ssh-keygen -R servidor
+
+### kh-erro
+#@ {"estado": "zero", "quem": "notebook"}
+ssh -o StrictHostKeyChecking=yes lab@servidor hostname
+
+### kh-m1
+#@ {"estado": "conhecido", "quem": "notebook"}
+ssh-keygen -F servidor
+
+### kh-m2
+#@ {"estado": "zero", "quem": "notebook"}
+ssh-keyscan -t ed25519 servidor 2>/dev/null | ssh-keygen -lf -
+
+### cr-simples
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor hostname
+ssh lab@servidor ls
+ssh lab@servidor cat relatorio.txt
+
+### cr-aspas
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor echo $HOSTNAME
+ssh lab@servidor 'echo $HOSTNAME'
+
+### cr-pipe
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'cat relatorio.txt' | grep vendas
+ssh lab@servidor 'grep vendas relatorio.txt'
+ssh lab@servidor 'cat relatorio.txt' > copia.txt
+cat copia.txt
+
+### cr-status
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'ls naoexiste'; echo "código: $?"
+
+### cr-tty
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor tty
+ssh -t lab@servidor tty
+
+### cr-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor cd /etc && pwd
+
+### cr-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'echo "remoto: $HOSTNAME"'
+
+### cr-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'ls naoexiste'; echo "código: $?"
+
+### sr-sessao
+#@ {"estado": "chave", "quem": "notebook", "resp": [["lab@servidor:[^$#\\n]*[$#] ", "pwd\n"], ["lab@servidor:[^$#\\n]*[$#] ", "ls -l\n"], ["lab@servidor:[^$#\\n]*[$#] ", "cat relatorio.txt\n"], ["lab@servidor:[^$#\\n]*[$#] ", "sudo whoami\n"], ["lab@servidor:[^$#\\n]*[$#] ", "exit\n"]]}
+ssh lab@servidor
+
+### sr-escape
+#@ {"estado": "chave", "quem": "notebook", "resp": [["lab@servidor:[^$#\\n]*[$#] ", "\n"], ["lab@servidor:~\\$ ", "~?"], ["~\\.", "exit\n"]]}
+ssh lab@servidor
+
+### sr-matar
+#@ {"estado": "chave", "quem": "notebook", "resp": [["lab@servidor:[^$#\\n]*[$#] ", "\n"], ["lab@servidor:~\\$ ", "~."]]}
+ssh lab@servidor
+
+### sr-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor htop
+
+### sr-m1
+#@ {"estado": "chave", "quem": "notebook", "resp": [["lab@servidor:[^$#\\n]*[$#] ", "pwd\n"], ["lab@servidor:[^$#\\n]*[$#] ", "exit\n"]]}
+ssh lab@servidor
+
+### sr-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -t lab@servidor 'sudo whoami'
+
+### cc-senha
+#@ {"estado": "conhecido", "quem": "notebook", "resp": [["password: ", "lab123\n"]]}
+ssh lab@servidor hostname
+
+### cc-chave
+#@ {"estado": "chave", "quem": "notebook"}
+ls -l ~/.ssh
+cat ~/.ssh/id_ed25519.pub
+ssh lab@servidor hostname
+
+### cc-servidor
+#@ {"estado": "chave", "quem": "servidor"}
+cat ~/.ssh/authorized_keys
+
+### cc-v
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v lab@servidor true 2>&1 | grep -E 'Authentications that|Offering|accepts key|Authenticated to'
+
+### cc-erro
+#@ {"estado": "chave", "quem": "notebook", "resp": [["password: ", "lab123\n"]], "prep": [["servidor", "root", "rm /home/lab/.ssh/authorized_keys"]]}
+ssh lab@servidor hostname
+
+### cc-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ls ~/.ssh
+
+### cc-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v lab@servidor true 2>&1 | grep 'Authenticated to'
+
+### kg-gerar
+#@ {"estado": "zero", "quem": "notebook", "resp": [["save the key", "\n"], ["Enter passphrase[^:]*: ", "frase do lab\n"], ["Enter same passphrase[^:]*: ", "frase do lab\n"]]}
+ssh-keygen -t ed25519 -C "ana@notebook"
+
+### kg-ver
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ls -l ~/.ssh
+cat ~/.ssh/id_ed25519.pub
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+file ~/.ssh/id_ed25519
+
+### kg-nome
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ssh-keygen -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab' -q
+ls ~/.ssh
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/antiga_rsa -N '' -q
+ssh-keygen -lf ~/.ssh/antiga_rsa.pub
+
+### kg-erro
+#@ {"estado": "chavelocal", "quem": "notebook", "resp": [["save the key", "\n"], ["Overwrite \\(y/n\\)\\? ", "n\n"]]}
+ssh-keygen -t ed25519
+
+### kg-m1
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ssh-keygen -t ed25519 -f ~/.ssh/teste_ed25519 -N '' -C teste
+
+### kg-m2
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+
+### ci-copiar
+#@ {"estado": "chavelocal", "quem": "notebook", "resp": [["password: ", "lab123\n"]]}
+ssh-copy-id lab@servidor
+ssh lab@servidor hostname
+
+### ci-servidor
+#@ {"estado": "chave", "quem": "servidor"}
+ls -la ~/.ssh
+cat ~/.ssh/authorized_keys
+
+### ci-repetir
+#@ {"estado": "chave", "quem": "notebook"}
+ssh-copy-id lab@servidor
+
+### ci-i
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab'"]]}
+ssh-copy-id -i ~/.ssh/servidor_lab.pub lab@servidor
+ssh -i ~/.ssh/servidor_lab lab@servidor 'tail -1 ~/.ssh/authorized_keys'
+
+### ci-erro
+#@ {"estado": "conhecido", "quem": "notebook"}
+ssh-copy-id lab@servidor
+
+### ci-m1
+#@ {"estado": "chavelocal", "quem": "notebook", "resp": [["password: ", "lab123\n"]]}
+ssh-copy-id lab@servidor
+
+### ci-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -o PasswordAuthentication=no lab@servidor 'echo entrei sem senha'
+
+### ak-manual
+#@ {"estado": "chavelocal", "quem": "notebook", "resp": [["password: ", "lab123\n"]]}
+cat ~/.ssh/id_ed25519.pub | ssh lab@servidor 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+ssh lab@servidor 'wc -l ~/.ssh/authorized_keys'
+
+### ak-linha
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "sed -i 's/^/command=\"cat relatorio.txt\",restrict /' /home/lab/.ssh/authorized_keys"]]}
+cut -c1-70 ~/.ssh/authorized_keys
+
+### ak-opcoes
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "sed -i 's/^/command=\"cat relatorio.txt\",restrict /' /home/lab/.ssh/authorized_keys"]]}
+ssh lab@servidor hostname
+ssh lab@servidor 'rm -rf ~'
+ssh lab@servidor
+
+### ak-erro
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "sed -i 's/^/from=\"192.168.0.99\" /' /home/lab/.ssh/authorized_keys"]]}
+ssh -o BatchMode=yes lab@servidor hostname
+
+### ak-m1
+#@ {"estado": "chave", "quem": "servidor"}
+grep -c ssh-ed25519 ~/.ssh/authorized_keys
+
+### ak-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'cut -d" " -f1,3 ~/.ssh/authorized_keys'
+
+### pp-pedir
+#@ {"estado": "chave", "quem": "notebook", "resp": [["Enter passphrase for key[^:]*: ", "frase do lab\n"]], "prep": [["notebook", "ana", "ssh-keygen -q -p -f ~/.ssh/id_ed25519 -P '' -N 'frase do lab'"]]}
+ssh lab@servidor hostname
+
+### pp-trocar
+#@ {"estado": "chave", "quem": "notebook", "resp": [["Enter old passphrase[^:]*: ", "frase do lab\n"], ["Enter new passphrase[^:]*: ", "frase nova e longa\n"], ["Enter same passphrase[^:]*: ", "frase nova e longa\n"]], "prep": [["notebook", "ana", "ssh-keygen -q -p -f ~/.ssh/id_ed25519 -P '' -N 'frase do lab'"]]}
+ssh-keygen -p -f ~/.ssh/id_ed25519
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+
+### pp-y
+#@ {"estado": "chave", "quem": "notebook", "resp": [["Enter passphrase[^:]*: ", "frase do lab\n"]], "prep": [["notebook", "ana", "ssh-keygen -q -p -f ~/.ssh/id_ed25519 -P '' -N 'frase do lab'"]]}
+ssh-keygen -y -f ~/.ssh/id_ed25519
+
+### pp-erro
+#@ {"estado": "chave", "quem": "notebook", "resp": [["Enter passphrase[^:]*: ", "frase errada\n"]], "prep": [["notebook", "ana", "ssh-keygen -q -p -f ~/.ssh/id_ed25519 -P '' -N 'frase do lab'"]]}
+ssh-keygen -y -f ~/.ssh/id_ed25519
+
+### pp-m1
+#@ {"estado": "chavelocal", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/teste_ed25519 -N '' -C teste"]]}
+ssh-keygen -p -f ~/.ssh/teste_ed25519 -P '' -N 'nova frase'
+
+### pp-m2
+#@ {"estado": "chavelocal", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/teste_ed25519 -N 'nova frase' -C teste"]]}
+ssh-keygen -y -f ~/.ssh/teste_ed25519 -P 'nova frase'
+
+### ag-iniciar
+#@ {"estado": "chave", "quem": "notebook", "resp": [["Enter passphrase[^:]*: ", "frase do lab\n"]], "prep": [["notebook", "ana", "ssh-keygen -q -p -f ~/.ssh/id_ed25519 -P '' -N 'frase do lab'"]]}
+eval "$(ssh-agent -s)"
+ssh-add
+ssh-add -l
+ssh lab@servidor hostname
+ssh lab@servidor 'echo de novo, sem frase'
+
+### ag-parar
+#@ {"estado": "chave", "quem": "notebook"}
+eval "$(ssh-agent -s)"
+ssh-add -q
+ssh-add -t 3600 -q ~/.ssh/id_ed25519
+ssh-add -D
+ssh-add -l
+eval "$(ssh-agent -k)"
+
+### ag-fwd
+#@ {"estado": "chave", "quem": "notebook"}
+eval "$(ssh-agent -s)"
+ssh-add -q
+ssh -A lab@servidor 'ssh-add -l; ssh -o StrictHostKeyChecking=accept-new lab@interno hostname'
+
+### ag-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh-add -l
+
+### ag-m1
+#@ {"estado": "chavelocal", "quem": "notebook"}
+eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519 && ssh-add -l
+
+### ag-m2
+#@ {"estado": "chavelocal", "quem": "notebook"}
+eval "$(ssh-agent -s)" && ssh-add -l
+
+### pm-ver
+#@ {"estado": "chave", "quem": "notebook"}
+ls -ld ~/.ssh
+stat -c '%a %U %n' ~/.ssh ~/.ssh/*
+
+### pm-aberta
+#@ {"estado": "chave", "quem": "notebook", "resp": [["password: ", "lab123\n"]], "prep": [["notebook", "root", "chmod 644 /home/ana/.ssh/id_ed25519"]]}
+ls -l ~/.ssh/id_ed25519
+ssh lab@servidor hostname
+chmod 600 ~/.ssh/id_ed25519
+ssh lab@servidor hostname
+
+### pm-servidor
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "chmod 777 /home/lab"], ["notebook", "ana", "ssh -o BatchMode=yes lab@servidor true || true"]]}
+ls -ld /home/lab
+sudo grep 'bad ownershi[p]' /var/log/auth.log
+
+### pm-arrumar
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "root", "chmod 777 /home/ana/.ssh; chmod 666 /home/ana/.ssh/*"]]}
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+chmod 644 ~/.ssh/id_ed25519.pub
+stat -c '%a %U %n' ~/.ssh ~/.ssh/*
+
+### pm-m1
+#@ {"estado": "chave", "quem": "notebook"}
+stat -c '%a %n' ~/.ssh ~/.ssh/id_ed25519
+
+### pm-m2
+#@ {"estado": "chave", "quem": "notebook"}
+chmod 644 ~/.ssh/id_ed25519; ssh -o BatchMode=yes lab@servidor true; chmod 600 ~/.ssh/id_ed25519
+
+### vc-i
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab'"], ["servidor", "root", "cp /srv/guia-ssh-lab/rt/notebook/home/ana/.ssh/servidor_lab.pub /home/lab/.ssh/authorized_keys"]]}
+ssh -o BatchMode=yes lab@servidor hostname
+ssh -i ~/.ssh/servidor_lab lab@servidor hostname
+
+### vc-ordem
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab'"], ["servidor", "root", "cp /srv/guia-ssh-lab/rt/notebook/home/ana/.ssh/servidor_lab.pub /home/lab/.ssh/authorized_keys"]]}
+ssh -v -i ~/.ssh/servidor_lab lab@servidor true 2>&1 | grep -E 'Will attempt key|Server accepts key'
+
+### vc-muitas
+#@ {"estado": "chave", "quem": "notebook"}
+for i in 1 2 3 4 5 6; do ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/k$i; done
+eval "$(ssh-agent -s)" >/dev/null && ssh-add -q ~/.ssh/k1 ~/.ssh/k2 ~/.ssh/k3 ~/.ssh/k4 ~/.ssh/k5 ~/.ssh/k6
+ssh lab@servidor hostname
+ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 lab@servidor hostname
+
+### vc-erro
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "ssh-keygen -q -t ed25519 -f ~/.ssh/servidor_lab -N '' -C 'chave do lab'"], ["servidor", "root", "cp /srv/guia-ssh-lab/rt/notebook/home/ana/.ssh/servidor_lab.pub /home/lab/.ssh/authorized_keys"]]}
+ssh -o BatchMode=yes -i ~/.ssh/servidor_lab.pub lab@servidor hostname
+
+### vc-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -i ~/.ssh/id_ed25519 lab@servidor 'echo usei a chave certa'
+
+### vc-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v -i ~/.ssh/id_ed25519 lab@servidor true 2>&1 | grep 'Server accepts key'
+
+### cf-criar
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'Host srv\n    HostName 192.168.0.20\n    User lab\n' >> ~/.ssh/config
+chmod 600 ~/.ssh/config
+cat ~/.ssh/config
+ssh srv hostname
+
+### cf-G
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "printf 'Host srv\\n    HostName 192.168.0.20\\n    User lab\\n' >> ~/.ssh/config"]]}
+ssh -G srv | grep -E '^(hostname|user|port|identityfile) '
+
+### cf-scp
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "printf 'Host srv\\n    HostName 192.168.0.20\\n    User lab\\n' >> ~/.ssh/config"]]}
+scp notas.txt srv:
+ssh srv ls
+
+### cf-erro
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'Host srv\n    HostNme 192.168.0.20\n' > ~/.ssh/config
+ssh srv hostname
+
+### cf-m1
+#@ {"estado": "config", "quem": "notebook"}
+ssh -G servidor | grep '^user '
+
+### cf-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh servidor 'echo alias funcionando'
+
+### ca-curinga
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'Host srv servidor\n    HostName 192.168.0.20\n    User lab\n\nHost *\n    ServerAliveInterval 60\n' > ~/.ssh/config
+ssh -G srv | grep -E '^(user|serveraliveinterval) '
+ssh -G servidor | grep -E '^(user|serveraliveinterval) '
+
+### ca-ordem
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'Host srv\n    User lab\nHost *\n    User ana\n' > certo.conf
+printf 'Host *\n    User ana\nHost srv\n    User lab\n' > errado.conf
+ssh -F certo.conf -G srv | grep '^user '
+ssh -F errado.conf -G srv | grep '^user '
+
+### ca-include
+#@ {"estado": "config", "quem": "notebook"}
+mkdir -p ~/.ssh/config.d && printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n' > ~/.ssh/config.d/trabalho.conf && sed -i '1i Include config.d/*.conf' ~/.ssh/config
+head -3 ~/.ssh/config
+ssh -G wiki | grep -E '^(hostname|user) '
+
+### ca-erro
+#@ {"estado": "config", "quem": "notebook"}
+chmod 666 ~/.ssh/config
+ssh servidor hostname
+
+### ca-m1
+#@ {"estado": "config", "quem": "notebook"}
+ssh -G servidor | grep -i '^serveraliveinterval'
+
+### ca-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh -o ServerAliveInterval=30 -G servidor | grep -i '^serveraliveinterval'
+
+### mx-tempo
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host servidor\n    ControlMaster auto\n    ControlPath ~/.ssh/cm-%%r@%%h:%%p\n    ControlPersist 10m\n' | cat - ~/.ssh/config > /tmp/config.novo && mv /tmp/config.novo ~/.ssh/config
+time ssh servidor true
+time ssh servidor true
+
+### mx-o
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host servidor\n    ControlMaster auto\n    ControlPath ~/.ssh/cm-%%r@%%h:%%p\n    ControlPersist 10m\n' | cat - ~/.ssh/config > /tmp/config.novo && mv /tmp/config.novo ~/.ssh/config
+ssh servidor true
+ls ~/.ssh
+ssh -O check servidor
+ssh -O exit servidor
+ssh -O check servidor
+
+### mx-erro
+#@ {"estado": "config", "quem": "notebook"}
+ssh -o ControlMaster=auto -o ControlPath='~/.ssh/naoexiste/cm-%r@%h:%p' servidor true
+
+### mx-m1
+#@ {"estado": "config", "quem": "notebook"}
+ssh -o ControlMaster=auto -o ControlPath='~/.ssh/cm-%r@%h:%p' -o ControlPersist=1m servidor true; ssh -o ControlPath='~/.ssh/cm-%r@%h:%p' -O check servidor
+
+### mx-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh -o ControlMaster=auto -o ControlPath='~/.ssh/cm-%r@%h:%p' -o ControlPersist=1m servidor true; ssh -o ControlPath='~/.ssh/cm-%r@%h:%p' -O exit servidor
+
+### sc-enviar
+#@ {"estado": "chave", "quem": "notebook"}
+scp notas.txt lab@servidor:
+scp notas.txt lab@servidor:/tmp/notas-da-ana.txt
+ssh lab@servidor 'ls; ls /tmp'
+
+### sc-baixar
+#@ {"estado": "chave", "quem": "notebook"}
+scp lab@servidor:relatorio.txt .
+cat relatorio.txt
+
+### sc-r
+#@ {"estado": "chave", "quem": "notebook"}
+scp -r projeto lab@servidor:
+ssh lab@servidor 'ls -R projeto'
+
+### sc-erro
+#@ {"estado": "chave", "quem": "notebook"}
+scp notas.txt lab@servidor
+ls
+
+### sc-m1
+#@ {"estado": "chave", "quem": "notebook"}
+scp lab@servidor:relatorio.txt . && grep vendas relatorio.txt
+
+### sc-m2
+#@ {"estado": "chave", "quem": "notebook"}
+scp notas.txt lab@servidor: && ssh lab@servidor 'head -1 notas.txt'
+
+### sf-sessao
+#@ {"estado": "chave", "quem": "notebook", "resp": [["sftp> ", "pwd\n"], ["sftp> ", "ls\n"], ["sftp> ", "get relatorio.txt\n"], ["sftp> ", "put notas.txt\n"], ["sftp> ", "ls -l\n"], ["sftp> ", "lls\n"], ["sftp> ", "bye\n"]]}
+sftp lab@servidor
+
+### sf-lote
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'cd site\nls\nget index.html\n' > lote.sftp
+sftp -b lote.sftp lab@servidor
+cat index.html
+
+### sf-erro
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'get naoexiste.txt\nget relatorio.txt\n' > lote.sftp
+sftp -b lote.sftp lab@servidor
+ls
+
+### sf-m1
+#@ {"estado": "chave", "quem": "notebook"}
+echo pwd | sftp -q lab@servidor
+
+### sf-m2
+#@ {"estado": "chave", "quem": "notebook"}
+printf 'get relatorio.txt\n' > lote.sftp && sftp -b lote.sftp lab@servidor
+
+### rs-primeira
+#@ {"estado": "chave", "quem": "notebook"}
+rsync -av projeto/ lab@servidor:projeto/
+rsync -av projeto/ lab@servidor:projeto/
+
+### rs-mudanca
+#@ {"estado": "chave", "quem": "notebook"}
+rsync -a projeto/ lab@servidor:projeto/
+echo 'p { margin: 0; }' >> projeto/estilo.css
+rsync -av projeto/ lab@servidor:projeto/
+
+### rs-dry
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "rsync -a projeto/ lab@servidor:projeto/ && rm projeto/estilo.css"]]}
+rsync -av --delete --dry-run projeto/ lab@servidor:projeto/
+ssh lab@servidor 'ls projeto'
+rsync -av --delete projeto/ lab@servidor:projeto/
+ssh lab@servidor 'ls projeto'
+
+### rs-erro
+#@ {"estado": "chave", "quem": "notebook"}
+rsync -a projeto lab@servidor:copia1/
+rsync -a projeto/ lab@servidor:copia2/
+ssh lab@servidor 'ls copia1 copia2'
+
+### rs-m1
+#@ {"estado": "chave", "quem": "notebook"}
+rsync -av projeto/ lab@servidor:projeto/
+
+### rs-m2
+#@ {"estado": "chave", "quem": "notebook"}
+rsync -av --dry-run --delete projeto/ lab@servidor:projeto/
+
+### pr-tar
+#@ {"estado": "chave", "quem": "notebook"}
+tar czf - projeto | ssh lab@servidor 'mkdir -p backup && tar xzf - -C backup'
+ssh lab@servidor 'ls -R backup'
+
+### pr-baixar
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'tar czf - site relatorio.txt' > backup-servidor.tar.gz
+tar tzf backup-servidor.tar.gz
+ls -l backup-servidor.tar.gz
+
+### pr-diff
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "printf 'Relatório mensal\\nvendas: 45\\nclientes novos: 7\\n' > relatorio-local.txt"]]}
+diff <(ssh lab@servidor cat relatorio.txt) relatorio-local.txt
+
+### pr-erro
+#@ {"estado": "chave", "quem": "notebook"}
+tar czf projeto | ssh lab@servidor 'tar tzf -'
+
+### pr-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'tar czf - relatorio.txt' | tar xzvf -
+
+### pr-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidor 'cat relatorio.txt' | wc -l
+
+### tl-antes
+#@ {"estado": "chave", "quem": "notebook"}
+curl -sS http://localhost:8080/
+ssh lab@servidor 'curl -s http://localhost:8080/'
+
+### tl-abrir
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor
+curl -s http://localhost:8080/
+ss -ltn | grep 8080
+
+### tl-porta
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 9000:localhost:8080 lab@servidor
+curl -s http://localhost:9000/
+
+### tl-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor
+ssh -f -N -L 8080:localhost:8080 lab@servidor
+
+### tl-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor && curl -s http://localhost:8080/
+
+### tl-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor && ss -ltn | grep ':8080 '
+
+### tr-direto
+#@ {"estado": "chave", "quem": "notebook"}
+curl -sS --max-time 3 http://192.168.0.130/
+ssh lab@servidor 'curl -s http://192.168.0.130/'
+
+### tr-tunel
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8081:192.168.0.130:80 lab@servidor
+curl -s http://localhost:8081/
+
+### tr-ssh
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 2200:192.168.0.130:22 lab@servidor
+ssh -p 2200 -o HostKeyAlias=interno lab@localhost hostname
+
+### tr-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8082:192.168.0.140:80 lab@servidor
+curl -sS --max-time 5 http://localhost:8082/
+
+### tr-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8082:127.0.0.1:8080 lab@servidor && curl -s http://localhost:8082/
+
+### tr-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 2201:localhost:22 lab@servidor && ssh -p 2201 -o HostKeyAlias=servidor lab@localhost 'echo "pelo túnel: $(hostname)"'
+
+### rr-abrir
+#@ {"estado": "chave", "quem": "notebook"}
+curl -s http://localhost:3000/
+ssh -f -N -R 9000:localhost:3000 lab@servidor
+ssh lab@servidor 'curl -s http://localhost:9000/'
+
+### rr-porta
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -R 9000:localhost:3000 lab@servidor
+ssh lab@servidor 'ss -ltn | grep 9000'
+
+### rr-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -R 9000:localhost:3000 lab@servidor
+ssh -f -N -R 9000:localhost:3000 lab@servidor
+
+### rr-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -R 9000:localhost:3000 lab@servidor && ssh lab@servidor 'curl -s http://localhost:9000/'
+
+### rr-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -R 9001:localhost:3000 lab@servidor && ssh lab@servidor "ss -ltn | grep ':9001 '"
+
+### td-socks
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -D 1080 lab@servidor
+curl -s --socks5-hostname localhost:1080 http://192.168.0.130/
+curl -s --socks5-hostname localhost:1080 http://localhost:8080/
+curl -s --socks5-hostname localhost:1080 http://interno/
+
+### td-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -D 1080 lab@servidor
+curl -sS --socks5 localhost:1080 http://interno/
+
+### td-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -D 1080 lab@servidor && curl -s --socks5-hostname localhost:1080 http://localhost:8080/
+
+### td-m2
+#@ {"estado": "chave", "quem": "notebook"}
+curl -sS --socks5-hostname localhost:1089 http://localhost:8080/
+
+### pj-sem
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@interno hostname
+ssh -o ConnectTimeout=3 lab@192.168.0.130 hostname
+
+### pj-j
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -J lab@servidor lab@192.168.0.130 hostname
+ssh -J lab@servidor lab@192.168.0.130 'ip -br addr'
+
+### pj-config
+#@ {"estado": "config", "quem": "notebook"}
+cat ~/.ssh/config
+ssh interno hostname
+ssh -G interno | grep -i '^proxyjump'
+scp notas.txt interno:
+ssh interno ls
+
+### pj-erro
+#@ {"estado": "chave", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"]], "prep": [["notebook", "ana", "ssh-keygen -R 192.168.0.130 >/dev/null 2>&1; rm -f ~/.ssh/known_hosts.old"]]}
+ssh -J lab@servidor lab@192.168.0.130 hostname
+
+### pj-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -J lab@servidor lab@192.168.0.20 'echo salto ok'
+
+### pj-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh -G interno | grep -i '^proxyjump'
+
+### tc-abrir
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' >> ~/.ssh/config
+ssh -f -N painel
+curl -s http://localhost:8080/
+pgrep -a ssh
+
+### tc-fechar
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' >> ~/.ssh/config
+ssh -f -N painel
+pkill -f 'ssh -f -N painel'
+pgrep -a ssh
+curl -sS http://localhost:8080/
+
+### tc-falha
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host painel\n    HostName 192.168.0.20\n    User lab\n    LocalForward 8080 localhost:8080\n    ExitOnForwardFailure yes\n' >> ~/.ssh/config
+ssh -f -N painel
+ssh -f -N painel; echo "código: $?"
+
+### tc-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor
+ssh -f -N -D 1080 lab@servidor
+pgrep -a ssh
+
+### tc-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -f -N -L 8080:localhost:8080 lab@servidor && pgrep -a ssh
+
+### tc-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -o ExitOnForwardFailure=yes -f -N -L 3000:localhost:8080 lab@servidor
+
+### sd-processo
+#@ {"estado": "chave", "quem": "servidor"}
+ps -C sshd -o pid,cmd
+sudo ss -ltnp | grep sshd
+
+### sd-arquivos
+#@ {"estado": "chave", "quem": "servidor"}
+ls /etc/ssh
+
+### sd-ativo
+#@ {"estado": "chave", "quem": "servidor"}
+grep -Ev '^(#|$)' /etc/ssh/sshd_config
+
+### sd-T
+#@ {"estado": "chave", "quem": "servidor"}
+sudo sshd -T | grep -E '^(port|passwordauthentication|pubkeyauthentication|permitrootlogin) '
+
+### sd-erro
+#@ {"estado": "chave", "quem": "servidor"}
+sshd -T | head -n 3
+
+### sd-m1
+#@ {"estado": "chave", "quem": "servidor"}
+sudo sshd -T | grep '^port '
+
+### sd-m2
+#@ {"estado": "chave", "quem": "servidor"}
+grep '^Include' /etc/ssh/sshd_config
+
+### ss-antes
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -o PasswordAuthentication=no lab@servidor hostname
+
+### ss-criar
+#@ {"estado": "chave", "quem": "servidor"}
+echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+sudo sshd -t && sudo kill -HUP "$(cat /run/sshd.pid)"
+sudo sshd -T | grep '^passwordauthentication'
+
+### ss-teste
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -o PubkeyAuthentication=no lab@servidor
+ssh lab@servidor hostname
+
+### ss-erro
+#@ {"estado": "chave", "quem": "servidor"}
+echo 'PasswordAuthentcation no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+sudo sshd -t && sudo kill -HUP "$(cat /run/sshd.pid)"
+
+### ss-m1
+#@ {"estado": "chave", "quem": "servidor"}
+echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf && sudo sshd -T | grep '^passwordauthentication'
+
+### ss-m2
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -o PubkeyAuthentication=no lab@servidor
+
+### rt-ver
+#@ {"estado": "chave", "quem": "servidor"}
+sudo sshd -T | grep '^permitrootlogin'
+
+### rt-entra
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "mkdir -p /root/.ssh && cp /home/lab/.ssh/authorized_keys /root/.ssh/ && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys"]]}
+ssh root@servidor 'whoami; hostname'
+
+### rt-proibir
+#@ {"estado": "chave", "quem": "servidor"}
+echo 'PermitRootLogin no' | sudo tee /etc/ssh/sshd_config.d/20-sem-root.conf
+sudo sshd -t && sudo kill -HUP "$(cat /run/sshd.pid)"
+sudo sshd -T | grep '^permitrootlogin'
+
+### rt-teste
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "mkdir -p /root/.ssh && cp /home/lab/.ssh/authorized_keys /root/.ssh/ && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys"], ["servidor", "root", "printf 'PermitRootLogin no\\n' > /etc/ssh/sshd_config.d/20-sem-root.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -o BatchMode=yes root@servidor hostname
+ssh lab@servidor 'sudo whoami'
+
+### rt-erro
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "mkdir -p /root/.ssh && cp /home/lab/.ssh/authorized_keys /root/.ssh/ && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys"], ["servidor", "root", "printf 'PermitRootLogin no\\n' > /etc/ssh/sshd_config.d/20-sem-root.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"], ["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh root@servidor
+
+### rt-m1
+#@ {"estado": "chave", "quem": "servidor"}
+sudo sshd -T | grep '^permitrootlogin'
+
+### rt-m2
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "mkdir -p /root/.ssh && cp /home/lab/.ssh/authorized_keys /root/.ssh/ && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys"], ["servidor", "root", "printf 'PermitRootLogin no\\n' > /etc/ssh/sshd_config.d/20-sem-root.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -o BatchMode=yes root@servidor hostname
+
+### se-criar
+#@ {"estado": "chave", "quem": "servidor"}
+printf 'PasswordAuthentication no\nPermitRootLogin no\nKbdInteractiveAuthentication no\nMaxAuthTries 3\nAllowUsers lab\nX11Forwarding no\n' | sudo tee /etc/ssh/sshd_config.d/50-endurecer.conf
+sudo sshd -t && sudo kill -HUP "$(cat /run/sshd.pid)"
+
+### se-T
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\nPermitRootLogin no\\nKbdInteractiveAuthentication no\\nMaxAuthTries 3\\nAllowUsers lab\\nX11Forwarding no\\n' > /etc/ssh/sshd_config.d/50-endurecer.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin|maxauthtries|allowusers|x11forwarding) '
+
+### se-teste
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\nPermitRootLogin no\\nKbdInteractiveAuthentication no\\nMaxAuthTries 3\\nAllowUsers lab\\nX11Forwarding no\\n' > /etc/ssh/sshd_config.d/50-endurecer.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh lab@servidor hostname
+ssh -o PubkeyAuthentication=no lab@servidor
+ssh -o BatchMode=yes ana@servidor hostname
+
+### se-porta
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "printf 'Port 2222\\n' > /etc/ssh/sshd_config.d/30-porta.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -p 2222 lab@servidor hostname
+ssh lab@servidor hostname
+
+### se-erro
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\nPermitRootLogin no\\nKbdInteractiveAuthentication no\\nMaxAuthTries 3\\nAllowUsers lab\\nX11Forwarding no\\n' > /etc/ssh/sshd_config.d/50-endurecer.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"], ["notebook", "ana", "ssh -o BatchMode=yes ana@servidor true 2>/dev/null; sleep 1; true"]]}
+sudo grep 'not allowe[d]' /var/log/auth.log
+
+### se-m1
+#@ {"estado": "chave", "quem": "servidor"}
+echo 'MaxAuthTries 3' | sudo tee /etc/ssh/sshd_config.d/50-endurecer.conf && sudo sshd -T | grep '^maxauthtries'
+
+### se-m2
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "printf 'Port 2222\\n' > /etc/ssh/sshd_config.d/30-porta.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -p 2222 lab@servidor hostname
+
+### sl-ver
+#@ {"estado": "chave", "quem": "servidor", "prep": [["notebook", "ana", "ssh lab@servidor true; ssh -o BatchMode=yes teste@servidor true 2>/dev/null; sleep 1; true"]]}
+sudo grep -E 'Accepte[d]|Invalid use[r]|session opene[d] for user lab' /var/log/auth.log
+
+### sl-contar
+#@ {"estado": "chave", "quem": "servidor", "prep": [["notebook", "ana", "ssh lab@servidor true; ssh -o BatchMode=yes teste@servidor true 2>/dev/null; sleep 1; true"]]}
+sudo grep -c 'Accepted publicke[y]' /var/log/auth.log
+sudo grep 'Invalid use[r]' /var/log/auth.log | awk '{print $(NF-2)}' | sort | uniq -c
+
+### sl-erro
+#@ {"estado": "chave", "quem": "servidor"}
+tail -n 2 /var/log/auth.log
+ls -l /var/log/auth.log
+
+### sl-m1
+#@ {"estado": "chave", "quem": "servidor", "prep": [["notebook", "ana", "ssh lab@servidor true; ssh -o BatchMode=yes teste@servidor true 2>/dev/null; sleep 1; true"]]}
+sudo grep -c 'Accepted publicke[y]' /var/log/auth.log
+
+### sl-m2
+#@ {"estado": "chave", "quem": "servidor", "prep": [["notebook", "ana", "ssh lab@servidor true; ssh -o BatchMode=yes teste@servidor true 2>/dev/null; sleep 1; true"]]}
+sudo grep 'Invalid use[r]' /var/log/auth.log
+
+### f2-conf
+#@ {"estado": "chave", "quem": "servidor"}
+cat /etc/fail2ban/jail.local
+
+### f2-errar
+#@ {"estado": "chave", "quem": "notebook", "resp": [["password: ", "errada1\n"], ["password: ", "errada2\n"], ["password: ", "errada3\n"]], "prep": [["servidor", "root", "fail2ban-client -q start && sleep 2"]]}
+ssh -o PubkeyAuthentication=no lab@servidor
+
+### f2-bloqueado
+#@ {"estado": "continua", "quem": "notebook", "prep": [["notebook", "ana", "sleep 3"]]}
+ssh lab@servidor hostname
+
+### f2-status
+#@ {"estado": "continua", "quem": "servidor"}
+sudo fail2ban-client status sshd
+sudo fail2ban-client set sshd unbanip 192.168.0.10
+
+### f2-volta
+#@ {"estado": "continua", "quem": "notebook"}
+ssh lab@servidor hostname
+
+### f2-erro
+#@ {"estado": "chave", "quem": "servidor"}
+sudo fail2ban-client status
+
+### f2-m1
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "fail2ban-client -q start && sleep 2"]]}
+sudo fail2ban-client status
+
+### f2-m2
+#@ {"estado": "chave", "quem": "servidor", "prep": [["servidor", "root", "fail2ban-client -q start && sleep 2"]]}
+sudo fail2ban-client get sshd maxretry
+
+### dp-ok
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v lab@servidor true 2>&1 | grep -E 'Connecting to|Connection established|Authenticating to|is known and matches|Authentications that|Offering|accepts key|Authenticated to'
+
+### dp-falha
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ssh -v -o BatchMode=yes lab@servidor true 2>&1 | grep -E 'Authentications that|Offering|Trying private key|Permission denied'
+
+### dp-G
+#@ {"estado": "config", "quem": "notebook"}
+ssh -G interno | grep -E '^(hostname|user|port|proxyjump|identityfile) '
+
+### dp-erro
+#@ {"estado": "zero", "quem": "notebook"}
+ssh -v -o BatchMode=yes lab@servidor true 2>&1 | grep -E 'Connection established|Server host key|host key is known|verification failed'
+
+### dp-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v lab@servidor true 2>&1 | grep 'Authenticated to'
+
+### dp-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -v lab@servidor true 2>&1 | grep 'Offering public key'
+
+### ek-negado
+#@ {"estado": "chavelocal", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh lab@servidor
+ssh -v lab@servidor true 2>&1 | grep -E 'Offering|Permission denied'
+
+### ek-perm
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "chmod 644 ~/.ssh/id_ed25519"]]}
+ls -l ~/.ssh/id_ed25519
+ssh -o BatchMode=yes lab@servidor hostname
+chmod 600 ~/.ssh/id_ed25519
+ssh lab@servidor hostname
+
+### ek-erro
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -o BatchMode=yes ana@servidor hostname
+
+### ek-m1
+#@ {"estado": "chave", "quem": "notebook", "prep": [["notebook", "ana", "chmod 644 ~/.ssh/id_ed25519"]]}
+chmod 600 ~/.ssh/id_ed25519 && ssh lab@servidor hostname
+
+### ek-m2
+#@ {"estado": "chavelocal", "quem": "notebook"}
+ssh -o BatchMode=yes lab@servidor hostname
+
+### eh-mudou
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "for k in ed25519 ecdsa rsa; do rm -f /etc/ssh/ssh_host_${k}_key /etc/ssh/ssh_host_${k}_key.pub; ssh-keygen -q -t $k -N '' -C root@servidor -f /etc/ssh/ssh_host_${k}_key; done; kill -HUP $(cat /run/sshd.pid); sleep 0.5"]]}
+ssh lab@servidor hostname
+
+### eh-R
+#@ {"estado": "chave", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"]], "prep": [["servidor", "root", "for k in ed25519 ecdsa rsa; do rm -f /etc/ssh/ssh_host_${k}_key /etc/ssh/ssh_host_${k}_key.pub; ssh-keygen -q -t $k -N '' -C root@servidor -f /etc/ssh/ssh_host_${k}_key; done; kill -HUP $(cat /run/sshd.pid); sleep 0.5"]]}
+ssh-keygen -R servidor
+ssh lab@servidor hostname
+
+### eh-batch
+#@ {"estado": "zero", "quem": "notebook"}
+ssh -o BatchMode=yes lab@servidor true
+
+### eh-erro
+#@ {"estado": "conhecido", "quem": "notebook", "prep": [["servidor", "root", "for k in ed25519 ecdsa rsa; do rm -f /etc/ssh/ssh_host_${k}_key /etc/ssh/ssh_host_${k}_key.pub; ssh-keygen -q -t $k -N '' -C root@servidor -f /etc/ssh/ssh_host_${k}_key; done; kill -HUP $(cat /run/sshd.pid); sleep 0.5"]]}
+ssh-keygen -R servidor
+ssh lab@192.168.0.20 hostname
+
+### eh-m1
+#@ {"estado": "chave", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"]], "prep": [["servidor", "root", "for k in ed25519 ecdsa rsa; do rm -f /etc/ssh/ssh_host_${k}_key /etc/ssh/ssh_host_${k}_key.pub; ssh-keygen -q -t $k -N '' -C root@servidor -f /etc/ssh/ssh_host_${k}_key; done; kill -HUP $(cat /run/sshd.pid); sleep 0.5"]]}
+ssh-keygen -R servidor && ssh lab@servidor hostname
+
+### eh-m2
+#@ {"estado": "zero", "quem": "notebook"}
+ssh -o BatchMode=yes lab@servidor true
+
+### ec-nome
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidr
+
+### ec-porta
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -p 2222 lab@servidor
+
+### ec-parado
+#@ {"estado": "chave", "quem": "notebook", "prep": [["servidor", "root", "kill $(cat /run/sshd.pid); sleep 0.5"]]}
+ssh lab@servidor
+
+### ec-ninguem
+#@ {"estado": "chave", "quem": "notebook", "tempo": 60}
+ssh -o ConnectTimeout=5 lab@192.168.0.50
+
+### ec-erro
+#@ {"estado": "chavelocal", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh -v -o BatchMode=yes lab@servidor true 2>&1 | grep -E 'Connecting to|Connection established|Permission denied'
+
+### ec-m1
+#@ {"estado": "chave", "quem": "notebook"}
+ssh -p 2222 lab@servidor
+
+### ec-m2
+#@ {"estado": "chave", "quem": "notebook"}
+ssh lab@servidr
+
+### pa-1
+#@ {"estado": "zero", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"], ["password: ", "lab123\n"]]}
+ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
+ssh-copy-id lab@servidor
+
+### pa-2
+#@ {"estado": "continua", "quem": "notebook"}
+printf 'Host srv\n    HostName servidor\n    User lab\n' >> ~/.ssh/config
+chmod 600 ~/.ssh/config
+ssh srv hostname
+
+### pa-3
+#@ {"estado": "continua", "quem": "servidor"}
+echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+sudo sshd -t && sudo kill -HUP "$(cat /run/sshd.pid)"
+
+### pa-4
+#@ {"estado": "continua", "quem": "notebook"}
+ssh -o PubkeyAuthentication=no srv
+ssh srv 'whoami; hostname'
+
+### pa-erro
+#@ {"estado": "conhecido", "quem": "notebook", "prep": [["servidor", "root", "printf 'PasswordAuthentication no\\n' > /etc/ssh/sshd_config.d/10-sem-senha.conf && kill -HUP $(cat /run/sshd.pid) && sleep 0.5"]]}
+ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
+ssh-copy-id lab@servidor
+
+### pa-m1
+#@ {"estado": "zero", "quem": "notebook", "resp": [["\\(yes/no", "yes\n"], ["password: ", "lab123\n"]]}
+ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519 && ssh-copy-id lab@servidor
+
+### pa-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh servidor 'whoami; hostname'
+
+### pb-1
+#@ {"estado": "config", "quem": "notebook"}
+rsync -a projeto/ servidor:backup/
+ssh servidor 'ls -R backup'
+
+### pb-2
+#@ {"estado": "continua", "quem": "notebook"}
+echo '<!-- versão 2 -->' >> projeto/index.html
+rsync -av projeto/ servidor:backup/
+
+### pb-3
+#@ {"estado": "continua", "quem": "notebook"}
+rm projeto/estilo.css
+rsync -av servidor:backup/estilo.css projeto/
+ls projeto
+
+### pb-4
+#@ {"estado": "continua", "quem": "notebook"}
+printf '#!/bin/sh\nrsync -a --delete ~/projeto/ servidor:backup/ && echo backup ok\n' > backup.sh
+chmod +x backup.sh
+./backup.sh
+cat backup.sh
+
+### pb-erro
+#@ {"estado": "config", "quem": "notebook"}
+rsync -a projeto servidor:backup/
+ssh servidor 'ls backup'
+
+### pb-m1
+#@ {"estado": "config", "quem": "notebook"}
+rsync -a projeto/ servidor:backup/ && ssh servidor ls backup
+
+### pb-m2
+#@ {"estado": "config", "quem": "notebook"}
+rsync -av --dry-run projeto/ servidor:backup/
+
+### pt-1
+#@ {"estado": "config", "quem": "notebook"}
+curl -sS --max-time 3 http://192.168.0.130/
+ssh interno 'curl -s http://localhost/'
+
+### pt-2
+#@ {"estado": "continua", "quem": "notebook"}
+printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n    ProxyJump servidor\n    LocalForward 8090 localhost:80\n    ExitOnForwardFailure yes\n' >> ~/.ssh/config
+ssh -G wiki | grep -E '^(hostname|proxyjump|localforward) '
+
+### pt-3
+#@ {"estado": "continua", "quem": "notebook"}
+ssh -f -N wiki
+curl -s http://localhost:8090/
+pgrep -a ssh
+pkill -f 'ssh -f -N wiki'
+
+### pt-erro
+#@ {"estado": "config", "quem": "notebook"}
+printf 'Host wiki\n    HostName 192.168.0.130\n    User lab\n    ProxyJump servidor\n    LocalForward 8090 localhost:80\n    ExitOnForwardFailure yes\n' >> ~/.ssh/config
+ssh -f -N wiki
+ssh -f -N wiki; echo "código: $?"
+
+### pt-m1
+#@ {"estado": "config", "quem": "notebook"}
+ssh -f -N -L 8090:localhost:80 interno && curl -s http://localhost:8090/
+
+### pt-m2
+#@ {"estado": "config", "quem": "notebook"}
+ssh -J servidor lab@192.168.0.130 'curl -s http://localhost/'
+

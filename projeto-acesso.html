@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto SSH: do zero ao servidor só com chave | Guia SSH</title>
+<meta name="description" content="Projeto final: criar a chave, copiar com ssh-copy-id, criar o apelido no config, desligar a senha e provar que só a chave entra.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto: <span class="hl">acesso seguro</span></h1>
+
+<p class="intro">O roteiro completo de um servidor novo, em quatro passos seguidos.</p>
+
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Juntar chave, config e sshd.</li>
+<li>Fazer na ordem certa.</li>
+<li>Provar o resultado.</li>
+</ul></div>
+
+<p class="pasta-teste">Todas as saídas desta aula foram colhidas de verdade com o <strong>OpenSSH 10.0p2 no Linux</strong> (Debian 13, Bash 5.2, <code>pt_BR.UTF-8</code>), no <a href="preparando.html">laboratório do guia</a>: o <code>notebook</code> (usuária <code>ana</code>, 192.168.0.10), o <code>servidor</code> (usuário <code>lab</code>, 192.168.0.20) e o <code>interno</code> (192.168.0.130, que só o servidor alcança). Antes de cada caixa o laboratório volta a um estado conhecido. As chaves e as impressões digitais que aparecem são de teste e já foram destruídas.</p>
+
+<hr>
+
+
+<h2>O projeto</h2>
+<p>Do zero, num servidor novo: criar a chave, levar para o servidor, dar um apelido, desligar a senha e provar que só a chave entra. É o roteiro de todo servidor que você for ganhar. As caixas seguem uma a outra, sem voltar o laboratório ao começo.</p>
+<hr>
+<h2>1. A chave e o servidor</h2>
+<pre class="term" data-cwd="~">$ ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
+$ ssh-copy-id lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;
+The authenticity of host 'servidor (192.168.0.20)' can't be established.
+ED25519 key fingerprint is SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+lab@servidor's password: 
+
+Number of key(s) added: 1   « a chave chegou
+
+Now try logging into the machine, with: &quot;ssh 'lab@servidor'&quot;
+and check to make sure that only the key(s) you wanted were added.
+$</pre>
+<p>Aqui a chave ficou sem frase para a caixa andar sozinha. No seu notebook, ponha uma frase e use o <a href="ssh-agent.html">ssh-agent</a>.</p>
+<hr>
+<h2>2. O apelido</h2>
+<pre class="term" data-cwd="~">$ printf 'Host srv\n    HostName servidor\n    User lab\n' &gt;&gt; ~/.ssh/config
+$ chmod 600 ~/.ssh/config
+$ ssh srv hostname
+servidor   « pelo apelido, sem senha
+$</pre>
+<hr>
+<h2>3. Fechando a senha, no servidor</h2>
+<pre class="term" data-cwd="~" data-user="lab" data-host="servidor">$ echo 'PasswordAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-sem-senha.conf
+PasswordAuthentication no
+$ sudo sshd -t &amp;&amp; sudo kill -HUP &quot;$(cat /run/sshd.pid)&quot;
+$</pre>
+<hr>
+<h2>4. A prova</h2>
+<pre class="term" data-cwd="~">$ ssh -o PubkeyAuthentication=no srv
+lab@servidor: Permission denied (publickey).   « sem chave, nada
+$ ssh srv 'whoami; hostname'
+lab   « com a chave, tudo
+servidor
+$</pre>
+<hr>
+<h2 id="errado">Quando dá errado</h2>
+<div class="cenario"><strong>Desligou a senha antes da chave</strong>
+<p>Se a ordem se inverte, o servidor tranca você do lado de fora e o <code>ssh-copy-id</code> já não consegue entrar:</p>
+<pre class="term" data-cwd="~">$ ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519
+$ ssh-copy-id lab@servidor
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+lab@servidor: Permission denied (publickey).
+$</pre>
+<p>Sempre: chave primeiro, teste, e só então a senha sai.</p></div>
+
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>ssh-keygen -t ed25519</code></td><td>a chave.</td></tr>
+<tr><td><code>ssh-copy-id lab@servidor</code></td><td>para o servidor.</td></tr>
+<tr><td><code>Host srv</code></td><td>o apelido.</td></tr>
+<tr><td><code>PasswordAuthentication no</code></td><td>fecha a senha.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>1. Levando a chave</h3><p>Complete para copiar a chave para o servidor:</p><div class="ex-code"><input data-answer="ssh-copy-id" aria-label="comando"> lab@servidor</div></div><div class="mc" data-answer="2"><p class="mc-q">2. A ordem certa é:</p>
+<label><input type="radio" name="q2"> desligar a senha, depois copiar a chave</label>
+<label><input type="radio" name="q2"> copiar a chave, testar, depois desligar a senha</label>
+<label><input type="radio" name="q2"> trocar a porta primeiro</label>
+<label><input type="radio" name="q2"> tanto faz</label></div><div class="mc" data-answer="1"><p class="mc-q">3. Para provar que a senha está mesmo desligada, use:</p>
+<label><input type="radio" name="q3"> <code>ssh -o PubkeyAuthentication=no srv</code></label>
+<label><input type="radio" name="q3"> <code>ssh -v srv</code></label>
+<label><input type="radio" name="q3"> <code>ssh-keygen -R srv</code></label>
+<label><input type="radio" name="q3"> <code>ssh -G srv</code></label></div>
+
+<hr>
+<h2>Missões</h2>
+<p>Rode no seu laboratório (o seu notebook e o seu servidor de teste) e cole o que o terminal respondeu. O botão <strong>Conferir</strong> compara com o que a saída real precisa ter.</p>
+<div class="trycmd" data-goal="src:ssh-keygen;;src:ssh-copy-id;;out:Number of key(s) added: 1">
+<p class="try-task"><strong>Missão:</strong> num notebook sem chave, crie uma e leve para o servidor.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/id_ed25519 &amp;&amp; ssh-copy-id lab@servidor
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: &quot;/home/ana/.ssh/id_ed25519.pub&quot;
+The authenticity of host 'servidor (192.168.0.20)' can't be established.
+ED25519 key fingerprint is SHA256:J0mxzl4IvFNcHQshs1EWMr0nqvoP4JTeJSyl7UkanuE.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+lab@servidor's password: 
+
+Number of key(s) added: 1
+
+Now try logging into the machine, with: &quot;ssh 'lab@servidor'&quot;
+and check to make sure that only the key(s) you wanted were added.
+</pre>
+</div><div class="trycmd" data-goal="src:whoami;;outre:^lab$;;outre:^servidor$">
+<p class="try-task"><strong>Missão:</strong> com o apelido pronto, mostre com que usuário e em que máquina você entra.</p>
+<pre class="script" data-file="comandos.sh">
+
+</pre>
+<pre class="solucao" data-file="comandos.sh">
+ssh servidor 'whoami; hostname'
+</pre>
+<pre class="saida-ok" data-file="comandos.sh" hidden>
+lab
+servidor
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Chave, teste, depois fecha a senha.</li>
+<li>Um apelido para cada servidor.</li>
+<li>Prove com <code>PubkeyAuthentication=no</code>.</li>
+</ul>
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
